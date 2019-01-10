@@ -1,8 +1,5 @@
 package com.nedap.go.gui;
 
-/**
- * @author Daan van Beek
- */
 public interface GoGui {
 
     /**

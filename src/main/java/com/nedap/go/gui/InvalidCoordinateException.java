@@ -1,12 +1,10 @@
 package com.nedap.go.gui;
 
-/**
- * @author Daan van Beek
- */
-@SuppressWarnings("serial")
 public class InvalidCoordinateException extends Exception {
 
-    public InvalidCoordinateException(String message) {
-        super(message);
-    }
+	private static final long serialVersionUID = -3201761568174113313L;
+
+	public InvalidCoordinateException(String message) {
+		super(message);
+	}
 }

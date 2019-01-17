@@ -24,6 +24,7 @@ public class notes {
    * Server   
    *    
    * 
+   * game history --> for  valid move
    * test
    * count points for winner
    * exception handling

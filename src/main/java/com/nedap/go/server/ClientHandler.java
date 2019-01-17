@@ -17,13 +17,15 @@ public class ClientHandler extends Thread{
   private BufferedReader in;
   private BufferedWriter out;
   private String clientName;
+  private int gameID;
 
   /**
    * Constructs a ClientHandler object
    * Initialises both Data streams.
    */
-  public ClientHandler(Server serverArg, Socket sockArg) throws IOException{
+  public ClientHandler(Server serverArg, Socket sockArg, int gameID) throws IOException{
     this.server = serverArg;
+    this.gameID = gameID;
     this.in = new BufferedReader(new InputStreamReader(sockArg.getInputStream()));
     this.out = new BufferedWriter(new OutputStreamWriter(sockArg.getOutputStream()));
   }
@@ -35,10 +37,10 @@ public class ClientHandler extends Thread{
    */
   public void announce() throws IOException {
     clientName = in.readLine();
-    server.broadcast("[" + clientName + " has entered]");
+    System.out.println("[" + clientName + " has entered]");
     
   }
-
+// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   /**
    * This method takes care of sending messages from the Client.
    * Every message that is received, is preprended with the name
@@ -49,9 +51,24 @@ public class ClientHandler extends Thread{
    */
   public void run() {
     try {
-      String input;
+      String input; 
       while ((input = in.readLine()) != null) {
-          server.broadcast(clientName + ": " + input);
+        if (input.startsWith("HANDSHAKE")) {
+          // do something
+        } else if(input.startsWith("SET_CONFIG")) {
+          // do something
+          // remember size for row/col to index
+        } else if(input.startsWith("MOVE")) {
+          // do something
+        } else if(input.startsWith("PASS")) {
+          // do something
+        } else if(input.startsWith("EXIT")) {
+          // do something
+        } else {
+          System.out.println("Unknown command. Known commands: "
+              + " HANDSHAKE, SET_CONFIG, MOVE, PASS, EXIT");
+          // plus wat er bij moet
+        }
       }
       shutdown();
     } catch (IOException e) {
@@ -59,6 +76,7 @@ public class ClientHandler extends Thread{
         shutdown();
     }
   }
+  //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
   /**
    * This method can be used to send a message over the socket
@@ -84,7 +102,11 @@ public class ClientHandler extends Thread{
    */
   private void shutdown() {
       server.removeHandler(this);
-      server.broadcast("[" + clientName + " has left]");
+      System.out.println("[" + clientName + " has left]");
   }
-
+  
+  // ------------- queries-----------
+  public int getGameID() {
+    return gameID;
+  }
 }

@@ -8,42 +8,61 @@ import java.io.OutputStreamWriter;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Scanner;
 
+/**
+ * Client
+ * @author marije.linthorst
+ *
+ */
 public class Client extends Thread {
   private static final String USAGE
-  = "usage: java week7.cmdchat.Client <name> <address> <port>";
+  = "Usage: " + Client.class.getName() + "<name> <address> <port>";
+  private static InetAddress host;
+  private static int port;
 
-  /** Start een Client-applicatie op. */
+  private String clientName;
+  private Socket sock;
+  private BufferedReader in;
+  private BufferedWriter out;
+
+  /** MAIN: Starts a Client-application. */
   public static void main(String[] args) {
-    if (args.length != 3) {
+    
+    Scanner in = new Scanner(System.in);
+    System.out.println("Enter name, IP address and port number: ");
+    String clientName = in.hasNext() ? in.next() : null;
+    String sIP = in.hasNext() ? in.next() : null;
+    String sPort = in.hasNext() ? in.next() : null;
+    in.close();
+    
+    
+    if (clientName ==  null || sIP == null || sPort == null) {
       System.out.println(USAGE);
       System.exit(0);
     }
-  
-    InetAddress host=null;
-    int port =0;
 
     try {
-      host = InetAddress.getByName(args[1]);
+      host = InetAddress.getByName(sIP);
     } catch (UnknownHostException e) {
       print("ERROR: no valid hostname!");
       System.exit(0);
     }
 
     try {
-      port = Integer.parseInt(args[2]);
+      port = Integer.parseInt(sPort);
     } catch (NumberFormatException e) {
       print("ERROR: no valid portnummer!");
       System.exit(0);
     }
 
     try {
-      Client client = new Client(args[0], host, port);
-      client.sendMessage(args[0]);
+      Client client = new Client(clientName, host, port);
+      client.sendMessage(clientName);
       client.start();
       
-      do{
-        String input = readString("");
+      do {
+        String input = readString();
         client.sendMessage(input);
       } while(true);
       
@@ -52,11 +71,6 @@ public class Client extends Thread {
       System.exit(0);
     }
   }
-
-  private String clientName;
-  private Socket sock;
-  private BufferedReader in;
-  private BufferedWriter out;
 
   /**
    * Constructs a Client-object and tries to make a socket connection
@@ -77,7 +91,21 @@ public class Client extends Thread {
     try {
       String line;
       while ((line = in.readLine()) != null) {
-        System.out.println(line);
+        if (line.startsWith("ACKNOWLEDGE_HANDSHAKE")) {
+          
+        } else if (line.startsWith("REQUEST_CONFIG")) {
+          
+        } else if (line.startsWith("ACKNOWLEDGE_CONFIG")) {
+          
+        } else if (line.startsWith("ACKNOWLEDGE_MOVE")) {
+          
+        } else if (line.startsWith("INVALID_MOVE")) {
+          
+        } else if (line.startsWith("UPDATE_STATUS")) {
+          
+        } else {
+          // geef server door unknown
+        }
       }
     } catch (IOException e) {
       e.printStackTrace();
@@ -117,8 +145,8 @@ public class Client extends Thread {
     System.out.println(message);
   }
 
-  public static String readString(String tekst) {
-    System.out.print(tekst);
+  // reads from the system input from this client
+  public static String readString() {
     String antw = null;
     try {
       BufferedReader in = new BufferedReader(new InputStreamReader(System.in));

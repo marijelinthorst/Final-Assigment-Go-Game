@@ -92,6 +92,14 @@ public class Go {
 
 		gogui.addHintIndicator(4, 4);
 	}
+	
+	/**
+	   * 
+	   * @return
+	   */
+	  public boolean isWinner(int color) {
+	    return false;
+	  }
 
 	public static void main(String[] args) {
 		new Go(9).testBoard();

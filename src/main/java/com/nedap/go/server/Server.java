@@ -1,21 +1,30 @@
 package com.nedap.go.server;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
+/**
+ * Server
+ * @author marije.linthorst
+ *
+ */
 public class Server {
   private static final String USAGE
-    = "usage: " + Server.class.getName() + " <port>";
+    = "Usage: " + Server.class.getName() + " <port>";
   private int port;
   private List<ClientHandler> threads;
   private static Server server;
 
   
-  /** MAIN: Asks for a port number and starts a Server-application. */
+  /** MAIN: Asks for a port number, starts a Server-application and 
+   * returns the IP address and port number. 
+   */
   public static void main(String[] args) {
     System.out.println("Enter port number: ");
     Scanner in = new Scanner(System.in);
@@ -28,6 +37,13 @@ public class Server {
       System.out.println(USAGE);
       System.out.println("Error: " + sPort + " is not an integer");
       System.exit(0);
+    }
+    try {
+      System.out.println("Server is created. IP address: " + InetAddress.getLocalHost().getHostAddress() 
+          + ". Port number: " + sPort);
+    } catch (UnknownHostException e) {
+      System.out.println("ERROR: Localhost is unknown");
+      e.printStackTrace();
     }
     server.run();
   }
@@ -53,30 +69,29 @@ public class Server {
       while (true) {
         System.out.print("Listening to " + port + "\n");
         Socket localSocket = sSocket.accept();
-        ClientHandler user = new ClientHandler(this, localSocket);
+        int gameID = 0;
+        ClientHandler user = new ClientHandler(this, localSocket, gameID);
         user.announce();
         user.start();
         addHandler(user);
+        
+        if (threads.size()%2==0) {
+          // new game with game id (count, starts with one)
+          // Add all clienthandler with game id == 0, to the game, automatic changes game id player.
+        }
       }                  
     } catch (IOException e) {
       e.printStackTrace();
     }
   }
-
-  public void print(String message){
+  
+  public void printtoGame (String message, int gameid) {
     System.out.println(message);
-  }
-
-  /**
-   * Sends a message using the collection of connected ClientHandlers
-   * to all connected Clients.
-   * @param msg message that is send
-   */
-  public void broadcast(String msg) {
-    print(msg);
     for (ClientHandler c:threads) {
-      c.sendMessage(msg);
-    } 
+      if (c.getGameID() == gameid) {
+        c.sendMessage(message);
+      }   
+    }
   }
 
   /**

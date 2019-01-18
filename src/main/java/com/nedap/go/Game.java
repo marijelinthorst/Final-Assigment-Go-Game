@@ -1,5 +1,6 @@
 package com.nedap.go;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -11,10 +12,6 @@ import java.util.List;
  * 
  * 
  * valid move (game his, rules)
- * 
- * get players?
- * exit?
- * get Board?
  * @author marije.linthorst
  */
 public class Game {
@@ -35,6 +32,7 @@ public class Game {
       board = new Board(boardsize);
       this.players=players;
       current = 0;
+      history = new ArrayList<String>();
   }
   
   // ---- Queries ------------------------------------------------
@@ -47,10 +45,19 @@ public class Game {
     return countPasses;
   }
   
-  public int getScore (int colour) {
+  public int getBoardSize() {
+    return board.getBoardSize();
+  }
+  
+  public double getScore (int colour) {
     //board.getCurrentIntBoard();
+    // add 0.5 to score of black
     // do something
-    return 0;
+    if (colour==1) {
+      return 0.5;
+    } else {
+      return 0;
+    }
   }
   
   public boolean isFinished() {
@@ -68,26 +75,31 @@ public class Game {
    * @return
    */
   public String isValidMove(int index, int colour) {
-    Board copy = board.deepCopy();
-    boolean iets = true;
+    
+    // check for captures and remove stuff if needed
+    // check if its the right colour to doMove
     if (!board.onBoard(index)) {
-      return "Not on board";
-    } else if (!board.isEmpty(index)){
-      return "Point not empty";
-    } else if(iets) { 
-      copy.setPoint(index, colour);
-      }
+      return "Move invalid: not on board";
+    }  
+    if (!board.isEmpty(index)){
+      return "Move invalid: point not empty";
+    } 
+    Board copy = board.deepCopy();
+    copy.setPoint(index, colour);
+    if(history.contains(copy.getCurrentStringBoard())) { 
+      return "Move invalid: creates a previous board state";
+    }
     // rules: check rules etc
-    return "true";
+    return "Move valid";
   }
   
   /**
    * Returns player that has won. <br>
    */
-  private Player determineWinner() {
+  public Player determineWinner() {
     Player winner = players[0];
     for (int i = 1; i<players.length;i++) {
-      if (winner.getScore() < players[i].getScore()) {
+      if (winner.getScore(this) < players[i].getScore(this)) {
         winner = players[i];
       }
     }
@@ -97,7 +109,7 @@ public class Game {
   /**
    * returns the game situation as a String.
    */
-  private String update() {
+  public String update() {
       return board.getCurrentStringBoard();
   }
   
@@ -106,11 +118,12 @@ public class Game {
 
   /**
    * Places stone on point, resets passes and changes current player
-   * to the next player
+   * to the next player. Adds board, after move, to the history
    */
   public void doMove(int index, int colour) {
     board.setPoint(index, colour);
-    history.add(board.getCurrentStringBoard());
+    Board copy = board.deepCopy();// is copy nodig?
+    history.add(copy.getCurrentStringBoard());
     countPasses=0;
     current++;
     if (current == players.length) {

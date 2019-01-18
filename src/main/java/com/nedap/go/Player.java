@@ -1,14 +1,18 @@
 package com.nedap.go;
 
-public abstract class Player {
+/**
+ * Class for creating a player with name and colour.
+ * Can determine the  score of this player
+ * @author marije.linthorst
+ */
+public class Player {
   private int colour;
-  private Board board;
   private String name;
   
   // -- Constructors -----------------------------------------------
   
   /**
-   * Creates a new Player object.
+   * Creates a new Player object with name and colour.
    * 
    */
   public Player(String name, int colour) {
@@ -35,27 +39,12 @@ public abstract class Player {
   }
   
   /**
-   * Determines the field for the next move.
-   * @param board: the current game board
-   * @return the player's choice
+   * Returns the colour of the player.
    */
-  public abstract int determineMove(Board board);
-
+  public double getScore(Game game) {
+    return game.getScore(colour);
+  }
+  
   //-- Commands ---------------------------------------------------
   
-  /**
-   * Makes a move on the board.
-   * @param board: the current board
-   */
-  public void makeMove() {
-    int choice = determineMove(board);
-    board.setPoint(choice, colour);
-    // of een pass
-  }
-
-  public int getScore() {
-    return board.getScore(colour);
-  }
-
-
 }

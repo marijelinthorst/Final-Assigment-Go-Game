@@ -20,6 +20,7 @@ public class Game {
   private Player[] players; // players in the game
   private int current; // index current player
   private List<String> history;
+  private int gameID;
   
   //-- Constructor -----------------------------------------------
 
@@ -28,14 +29,19 @@ public class Game {
    * @param s0 the first player
    * @param s1 the second player
    */
-  public Game(Player[] players, int boardsize) {
+  public Game(Player[] players, int boardsize, int gameID) {
       board = new Board(boardsize);
       this.players=players;
+      this.gameID = gameID;
       current = 0;
       history = new ArrayList<String>();
   }
   
   // ---- Queries ------------------------------------------------
+  
+  public int getGameID() {
+    return gameID;
+  }
   
   public Player currentPlayer() {
     return players[current];

@@ -14,7 +14,12 @@ public class GameTest {
     players = new Player[2];
     players[0]= new HumanPlayer("Piet", 1);
     players[1]= new Player("Klaas", 2);
-    game = new Game(players, 3);
+    game = new Game(players, 3, 5);
+  }
+  
+  @Test
+  public void testgetGameID() {
+    assertEquals(game.getGameID(), 5);
   }
 
   @Test

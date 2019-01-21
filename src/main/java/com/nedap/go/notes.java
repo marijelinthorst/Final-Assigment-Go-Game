@@ -2,38 +2,23 @@ package com.nedap.go;
 
 public class notes {
   /**
+   *   
    * 
-   * Model
-   *    - board
-   *    - game
-   *    - Go
-   *    - player
-   *        - human player
-   *        - strategy
-   *    - mark??
    *    
-   * View
-   *    - GUI
-   *    - TUI
+   * Move duplicate code NaiveCompPLayer and Game
+   * to seperate class (isValidMove and History)
    *    
+   * Count points for winner
+   * hint functionallity
+   * client/server quits
    * 
-   * Controller   
-   *    - 
-   *    
-   * Client   
-   * Server   
-   *    
    * 
-   * game history --> for  valid move
    * test
-   * count points for winner
    * exception handling
    * checkstyle
-   * JavaDoc complex classes
+   * JavaDoc
    * README
-   * hint functionallity
-   * start new game
-   * client/server quits
+   * 
    */
  
 

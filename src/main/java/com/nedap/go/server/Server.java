@@ -9,6 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
+import com.nedap.go.Game;
+import com.nedap.go.Player;
+
 /**
  * Server
  * @author marije.linthorst
@@ -20,6 +23,8 @@ public class Server {
   private int port;
   private List<ClientHandler> threads;
   private static Server server;
+  private int gameIDCount;
+  private Player[] players;
 
   
   /** MAIN: Asks for a port number, starts a Server-application and 
@@ -64,18 +69,24 @@ public class Server {
    * communication with the Client.
    */
   public void run() {
+  gameIDCount = 1;  
     try {
       ServerSocket sSocket = new ServerSocket(this.port);
       while (true) {
         System.out.print("Listening to " + port + "\n");
         Socket localSocket = sSocket.accept();
-        int gameID = 0;
-        ClientHandler user = new ClientHandler(this, localSocket, gameID);
+        ClientHandler user = new ClientHandler(this, localSocket, 0);
         user.announce();
         user.start();
         addHandler(user);
         
         if (threads.size()%2==0) {
+          
+          
+          
+          
+          //Game game = new Game(players, boardsize, gameIDCount);
+          gameIDCount++;
           // new game with game id (count, starts with one)
           // Add all clienthandler with game id == 0, to the game, automatic changes game id player.
         }

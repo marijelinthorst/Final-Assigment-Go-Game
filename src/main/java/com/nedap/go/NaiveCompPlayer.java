@@ -6,9 +6,11 @@ import java.util.Random;
 
 public class NaiveCompPlayer extends Player{
   private List<String> history;
+  private int gameID;
 
-  public NaiveCompPlayer(String name, int colour) {
+  public NaiveCompPlayer(String name, int colour, int gameID) {
     super(name, colour);
+    this.gameID=gameID;
   }
 
   /**

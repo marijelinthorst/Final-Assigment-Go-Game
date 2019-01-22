@@ -22,7 +22,8 @@ import com.nedap.go.Player;
  *
  */
 public class Client extends Thread {
-	private static final String USAGE = "Usage: " + Client.class.getName() + "<name> <address> <port>";
+	private static final String USAGE = "Usage: " + Client.class.getName() 
+			+ "<name> <address> <port>";
 	private static InetAddress host;
 	private static int port;
 
@@ -40,6 +41,13 @@ public class Client extends Thread {
 	private Socket sock;
 	private Scanner in;
 	private BufferedWriter out;
+	
+	// booleans which determine status of client
+	private boolean isFinished = false;
+	private boolean isHandshakeSent = false;
+	private boolean isGameConfigured = false;
+	private boolean isGameConfigRequested = false;
+	private boolean isCurrentPlayer = false;
 
 	/** MAIN: Starts a Client-application. */
 	public static void main(String[] args) {
@@ -73,7 +81,8 @@ public class Client extends Thread {
 		try {
 			Client client = new Client(clientName, host, port);
 			client.sendMessage(clientName);
-			client.start();
+			client.startUserInput();
+			client.startServerInput();
 
 		} catch (IOException e) {
 			print("ERROR: couldn't construct a client object!");
@@ -82,7 +91,7 @@ public class Client extends Thread {
 	}
 
 	/**
-	 * Constructs a Client-object and tries to make a socket connection
+	 * Constructs a Client-object and tries to make a socket connection.
 	 */
 	public Client(String name, InetAddress host, int port) throws IOException {
 		this.clientName = name;
@@ -90,10 +99,87 @@ public class Client extends Thread {
 		this.sock = new Socket(host, port);
 		System.out.println("Socket created");
 		this.in = new Scanner(new BufferedReader(new InputStreamReader(sock.getInputStream())));
-		in.useDelimiter("\\+");
 		this.out = new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()));
 	}
 
+	public void startUserInput() {
+		Thread userInTread = new Thread() {
+			public void run() {
+				userEventLoop();
+			}
+		};
+		userInTread.start();
+	}
+	
+	public void userEventLoop() {
+		Scanner userIn = new Scanner(System.in);
+		while (!isFinished && userIn.hasNext()) {
+			showPrompt();
+			String inputLine = userIn.nextLine();
+			if (inputLine!="") {
+				handleUILine(inputLine);
+			}
+		}
+	}
+// needs some other prompts for unknown command, invalid move, update status	
+	public void showPrompt() {
+		if (!isHandshakeSent) {
+            System.out.println("Please enter player name");
+		} else if (!isGameConfigured) {
+			if (leader == 1 && isGameConfigRequested) {
+				System.out.println("Please enter the preferred colour and "
+						+ "desired width of the game board");
+			} else {
+				System.out.println("Waiting on other player to configurate the game");
+			}
+            
+        } else if (isCurrentPlayer) {
+            System.out.println("Please enter your next move");
+        }
+	}
+	
+	public void handleUILine(String inputLine) {
+		if (!isHandshakeSent) {
+            dispatchHandshakeLine(inputLine);
+        } else if (!isGameConfigured && isGameConfigRequested) {
+            dispatchGameConfigurationLine(inputLine);
+        } else {
+            dispatchGamePlayLine(inputLine);
+        }
+	}
+	
+	public void dispatchHandshakeLine(String line) {
+       //  something
+    }
+	
+	public void dispatchGameConfigurationLine(String line) {
+        // something
+    }
+	
+	public void dispatchGamePlayLine(String line) {
+        // something
+		if (!line.startsWith("exit") && !line.startsWith("quit")) {
+            inputMoveQueue.put(Move.parseMove(line));
+        }
+    }
+	
+	
+	
+	public void startServerInput() {
+		Thread serverInTread = new Thread() {
+			public void run() {
+				
+			}
+		};
+		serverInTread.start();
+	}
+	
+	
+	
+	
+	
+	
+	
 	/**
 	 * Reads the messages in the socket connection. Each message will command will
 	 * be dealt with in the next section
@@ -103,20 +189,21 @@ public class Client extends Thread {
 		Scanner clientIn = new Scanner(System.in);
 		this.handshake();
 
-		while (in.hasNext()) {
-			line = in.next();
-			if (line.equals("ACKNOWLEDGE_HANDSHAKE")) {
-				this.ackHandshake();
-			} else if (line.equals("REQUEST_CONFIG")) {
+		while (in.hasNextLine()) {
+			line = in.nextLine();
+			
+			if (line.startsWith("ACKNOWLEDGE_HANDSHAKE")) {
+				this.ackHandshake(line);
+			} else if (line.startsWith("REQUEST_CONFIG")) {
 				this.config(clientIn);
-			} else if (line.equals("ACKNOWLEDGE_CONFIG")) {
-				Object configuration = parseConfiguration(in);
-				this.ackConfig(configuration);
-			} else if (line.equals("ACKNOWLEDGE_MOVE")) {
+			} else if (line.startsWith("ACKNOWLEDGE_CONFIG")) {
+				//Object configuration = parseConfiguration(in);
+				//this.ackConfig(configuration);
+			} else if (line.startsWith("ACKNOWLEDGE_MOVE")) {
 				this.ackMove();
-			} else if (line.equals("INVALID_MOVE")) {
+			} else if (line.startsWith("INVALID_MOVE")) {
 				this.invalidMove();
-			} else if (line.equals("UPDATE_STATUS")) {
+			} else if (line.startsWith("UPDATE_STATUS")) {
 				this.updateStatus();
 			} else {
 				System.out.println("Something is wrong with server");
@@ -132,15 +219,24 @@ public class Client extends Thread {
 		this.sendMessage("HANDSHAKE+" + clientName);
 	}
 
-	public void ackHandshake() {
-		gameID = this.in.nextInt();
-		leader = this.in.nextInt();
-		System.out.println("Server acknowledged handshake. GameID = " + gameID);
-		if (leader == colour) {
-			System.out.println("You are the leader of this game");
-		} else {
-			System.out.println("Opponant (" + opponant + ") is leader of this game");
+	public void ackHandshake(String line) {
+		Scanner serverIn = new Scanner(line);
+		serverIn.useDelimiter("\\+");
+		
+		if (serverIn.hasNextInt()) {
+			gameID = serverIn.nextInt();
 		}
+		if (serverIn.hasNextInt()) {
+			leader = serverIn.nextInt();
+		}
+
+		print("Server acknowledged handshake. GameID = " + gameID);
+		if (leader == colour) {
+			print("You are the leader of this game");
+		} else {
+			print("Opponant (" + opponant + ") is leader of this game");
+		}
+		serverIn.close();
 	}
 
 	public void config(Scanner in) {
@@ -159,7 +255,8 @@ public class Client extends Thread {
 		opponant = this.in.next();
 
 		do {
-			System.out.println("Make human player or computer player? " + "Type \"human\" or \"comp\".");
+			System.out.println("Make human player or computer player? " + 
+					"Type \"human\" or \"comp\".");
 			String suggestType = in.next();
 
 			if (suggestType.equals("human")) {
@@ -258,17 +355,17 @@ public class Client extends Thread {
 		}
 	}
 
-	/** returns the client name */
+	/** returns the client name. */
 	public String getClientName() {
 		return clientName;
 	}
 
-	/** prints message to console of this client */
+	/** prints message to console of this client. */
 	private static void print(String message) {
 		System.out.println(message);
 	}
 
-	/** reads from the system input from this client */
+	/** reads from the system input from this client. */
 	public static String readString() {
 		String antw = null;
 		try {

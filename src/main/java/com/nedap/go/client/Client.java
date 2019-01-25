@@ -9,11 +9,13 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.Scanner;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 import com.nedap.go.Board;
 import com.nedap.go.HumanPlayer;
 import com.nedap.go.NaiveCompPlayer;
-import com.nedap.go.Player;
+import com.nedap.go.PlayingPlayer;
 
 /**
  * Client.
@@ -26,21 +28,19 @@ public class Client extends Thread {
 			+ "<name> <address> <port>";
 	private static InetAddress host;
 	private static int port;
-	private String clientName;
+	private static String clientName;
 	private Socket sock;
 	private Scanner in;
 	private BufferedWriter out;
 	
 	// variables for playing the game
 	private String playerType;
-	private static Player player = null;
-	private int colour;
+	private static PlayingPlayer player = null;
 	private int gameID;
-	private String playerName;
 	private int size;
-	private String gameState;
 	private String opponant;
 	private Board board;
+	private BlockingQueue<String> queue;
 	
 	// booleans which determine status of client
 	private boolean isFinished = false;
@@ -49,6 +49,22 @@ public class Client extends Thread {
 	private boolean isGameConfigRequested = false;
 	private boolean isCurrentPlayer = false;
 	private boolean isLeader = false;
+	
+	// variables for command length
+	private final int ackHand = 3;
+	private final int reqConfig = 2;
+	private final int ackConfig = 6;
+	private final int ackMove = 4;
+	private final int invMove = 2;
+	private final int unCom = 2;
+	private final int gameFin = 5;	
+	private final int gameSt = 3;
+	private final int moveL = 2;
+	
+	// common error messages
+	private String serverError = "Something is wrong with the server";
+	private String gameIDError = "GameID is incorrect";
+	private String commandError = "Command is unknown: ";
 
 	/** MAIN: Starts a Client-application that can connect to a specific server.
 	 * Starts the user and server input.
@@ -57,7 +73,7 @@ public class Client extends Thread {
 
 		Scanner in = new Scanner(System.in);
 		System.out.println("Enter name, IP address and port number");
-		String clientName = in.hasNext() ? in.next() : null;
+		clientName = in.hasNext() ? in.next() : null;
 		String sIP = in.hasNext() ? in.next() : null;
 		String sPort = in.hasNext() ? in.next() : null;
 		in.close();
@@ -83,7 +99,6 @@ public class Client extends Thread {
 
 		try {
 			Client client = new Client(clientName, host, port);
-			client.sendMessage(clientName);
 			client.startUserInput();
 			client.startServerInput();
 
@@ -97,11 +112,12 @@ public class Client extends Thread {
 	 * Constructs a Client-object and tries to make a socket connection.
 	 */
 	public Client(String name, InetAddress host, int port) throws IOException {
-		this.clientName = name;
+		clientName = name;
 		this.sock = new Socket(host, port);
 		System.out.println("Socket created");
 		this.in = new Scanner(new BufferedReader(new InputStreamReader(sock.getInputStream())));
 		this.out = new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()));
+		queue = new ArrayBlockingQueue<String>(5);
 	}
 	
 	//---------------- user input ---------------------------------
@@ -116,21 +132,19 @@ public class Client extends Thread {
 	
 	public void userEventLoop() {
 		Scanner userIn = new Scanner(System.in);
-		while (!isFinished && userIn.hasNext()) {
+		while (!isFinished) {
 			showPrompt();
-			String inputLine = userIn.nextLine();
-			if (inputLine != "") {
+			if (userIn.hasNext()) {
+				String inputLine = userIn.nextLine();
 				dispatchUILine(inputLine);
 			}
 		}
 		userIn.close();
 	}
 	
-// needs some other prompts for unknown command, invalid move, update status	
 	public void showPrompt() {
 		if (!isHandshakeSent) {
-            System.out.println("Please enter player name and \"Human\" or \"Comp\""
-            		+ ", seperated by a \",\"");
+            System.out.println("Please enter \"human\" or \"comp\"");
 		} else if (!isGameConfigured) {
 			if (isLeader && isGameConfigRequested) {
 				System.out.println("Please enter the preferred colour and "
@@ -157,26 +171,24 @@ public class Client extends Thread {
 	}
 	
 	public void dispatchHandshakeLine(String line) {
-		String[] input = line.split(",");
-		if (input.length == 2 && input[1].equals("comp") || input[1].equals("human")) {
-			playerName = input[0];
-			playerType = input[1];
-			this.sendMessage("HANDSHAKE+" + playerName);
+		if (line.equals("comp") || line.equals("human")) {
+			playerType = line;
+			this.sendMessage("HANDSHAKE+" + clientName);
+			isHandshakeSent = true;
 		} else {
-			System.out.println("Handshake requires 2 arguments, "
-					+ "second argument needs to be human or comp)");
+			System.out.println("Handshake requires the argument to be human or comp");
 		}
     }
 	
 	public void dispatchGameConfigurationLine(String line) {
 		String[] input = line.split(",");
-		if (input.length == 2) {
+		if (input.length == reqConfig) {
 			try {
 				int prefColour = Integer.parseInt(input[0]);
 				int prefBoardSize = Integer.parseInt(input[1]);
 				this.sendMessage("SET_CONFIG+" + gameID + "+" + prefColour + "+" + prefBoardSize);
 			} catch (NumberFormatException e) {
-// log something
+				//TODO: log something
 				System.out.println("Preferred colour and board size need to be integers");
 			}
 		} else {
@@ -186,13 +198,12 @@ public class Client extends Thread {
     
 	
 	public void dispatchGamePlayLine(String line) {
-		if (player instanceof HumanPlayer) {
-			String move = ((HumanPlayer) player).determineMove(line);
-			if (!move.equals("")) {
-// send to server or queue
-				// inputMoveQueue.put(Move.parseMove(line));
+		if (playerType.equals("human")) {
+			if (line.equals("EXIT")) {
+				queue.add(line);
+				// TODO: implement quit
 			} else {
-				System.out.println("Invalid move");
+				queue.add(line);	
 			}
 		}
     }
@@ -219,6 +230,7 @@ public class Client extends Thread {
 	 * Reads the messages in the socket connection. Each message will command will
 	 * be dealt with in the next section
 	 */
+	// TODO: implement set_rematch
 	public void dispatchServerLine(String inputLine) {
 		if (inputLine.startsWith("ACKNOWLEDGE_HANDSHAKE")) {
 			System.out.println("Handshake acknowledged");
@@ -232,13 +244,13 @@ public class Client extends Thread {
 			this.ackMove(inputLine);
 		} else if (inputLine.startsWith("INVALID_MOVE")) {
 			this.invalidMove(inputLine);
-		} else if (inputLine.startsWith("UPDATE_STATUS")) {
-			this.updateStatus(inputLine);
 		} else if (inputLine.startsWith("GAME_FINISHED")) {
 			this.gameFinished(inputLine);
 			isFinished = true;
+		} else if (inputLine.startsWith("UNKNOWN_COMMAND")) {
+			this.unknownCommand(inputLine);
 		} else {
-			System.out.println("Something is wrong with server");
+			System.out.println(serverError);
 			System.out.println("Command is unknown (" + inputLine + ")");
 		}
 	}
@@ -246,145 +258,171 @@ public class Client extends Thread {
 	// ----------- dealing with server commands --------------------------
 	public void ackHandshake(String line) {
 		String[] input = line.split("+");
-		if (input.length == 3) {
+		if (input.length == ackHand) {
 			try {
 				gameID = Integer.parseInt(input[1]);
 				isLeader = Integer.parseInt(input[2]) == 1;
 			} catch (NumberFormatException e) {
-// log something
-				System.out.println("GameID and/or leader is/are no integer(s)."
-						+ " Something is wrong with server");
+				//TODO: log something
+				System.out.println("GameID and/or leader is/are no integer(s).");
+				System.out.println(serverError);
 			}
 		} else {
-			System.out.println("Command is unknown (" + line + ")");
+			System.out.println(commandError + line);
+			System.out.println(serverError);
 		}
 	}
 
 	public void ackConfig(String line) {
 		String[] input = line.split("+");
-		if (input.length == 6) {
-			playerName = input[1];
-			gameState = input[4];
+		if (input.length == ackConfig) {
+			clientName = input[1];
+			String gameState = input[4];
 			opponant = input[5];
 			try {
-				colour = Integer.parseInt(input[2]);
+				int colour = Integer.parseInt(input[2]);
 				size  = Integer.parseInt(input[3]);
+				
+				this.makePlayer(colour);
+				this.startQueue();
+				this.doMove(gameState);
+
+				System.out.println("Configuration succesful.");
+				System.out.println("Playername = " + clientName);
+				System.out.println("Colour = " + colour);
+				System.out.println("Board size = " + size);
+				System.out.println("Game state  = " + gameState);
+				System.out.println("Opponant's name = " + opponant);
+				
+				this.isGameConfigured = true;	
 			} catch (NumberFormatException e) {
-// log something
-				System.out.println("Colour and/or size is/are no integer(s)." + 
-						"Something is wrong with server");
-			}
-			this.makePlayer();
-			this.doMove(gameState);
-
-			System.out.println("Configuration succesful.");
-			System.out.println("Playername = " + playerName);
-			System.out.println("Colour = " + colour);
-			System.out.println("Board size = " + size);
-			System.out.println("Game state  = " + gameState);
-			System.out.println("Opponant's name = " + opponant);	
+				// TODO: log something
+				System.out.println("Colour and/or size is/are no integer(s).");
+				System.out.println(serverError);
+			}	
 		} else {
-			System.out.println("Command is unknown (" + line + ")");
+			System.out.println(commandError + line);
+			System.out.println(serverError);
 		}
 	}
 	
-	public void makePlayer() {
+	public void makePlayer(int colour) {
 		if (playerType.equals("human")) {
-			player = new HumanPlayer(playerName, colour, gameID);
+			player = new HumanPlayer(clientName, colour, gameID);
 		} else if (playerType.equals("comp")) {
-			player = new NaiveCompPlayer(playerName, colour, gameID);
+			player = new NaiveCompPlayer(clientName, colour, gameID);
 		}
 	}
 	
-// doMove need adjustment
 	public void doMove(String gameStatus) {
-		// check gameID
 		String[] status = gameStatus.split(";");
-		String move = "";
-		if (status.length == 3) {
+		if (status.length == gameSt) {
 			this.board = new Board(status[2]);
-			if (player instanceof NaiveCompPlayer) {
-				((NaiveCompPlayer) player).addToHistory(status[2]);
-			}
-
-			if (status[1].equals(Integer.toString(colour))) {
+			if (status[1].equals(Integer.toString(player.getColour()))) {
 				this.isCurrentPlayer = true;
-// human player is already handled by changing status of client. 
-// Sends move to queue, not implemented yet 
-				if (player instanceof HumanPlayer) {
-					//move = ((HumanPlayer) player).determineMove(board);
-				} else if (player instanceof NaiveCompPlayer) {
-					move = ((NaiveCompPlayer) player).determineMove(board);
-				}
-				this.sendMessage(move);
+				queue.add("DOMOVE");				
 			}
 		} else {
-			System.out.println("Something is wrong with server");
 			System.out.println("Gamestate is incorrect");
+			System.out.println(serverError);
 		}
 	}
 
 	public void ackMove(String line) {
+		// TODO: status 2 = move/pass
 		String[] input = line.split("+");
-		if (input.length == 4) {
+		if (input.length == ackMove) {
 			try {
 				if (Integer.parseInt(input[1]) == gameID) {
-					gameState = input[3];
+					String gameState = input[3];
 					this.doMove(gameState);
 				} else {
-					System.out.println("Something is wrong with server");
-					System.out.println("GameID is incorrect");
+					System.out.println(gameIDError);
+					System.out.println(serverError);
 				}
 			} catch (NumberFormatException e) {
-// log something
-				System.out.println("Something is wrong with server");
-				System.out.println("GameID is no integer");
+				// TODO: log something
+				System.out.println(gameIDError);
+				System.out.println(serverError);
 			}
 		} else {
-			System.out.println("Something is wrong with server");
-			System.out.println("Command is unknown (" + line + ")");
+			System.out.println(commandError + line);
+			System.out.println(serverError);
 		}
 	}	
 
 	public void invalidMove(String line) {
 		String[] input = line.split("+");
-		if (input.length == 2) {
+		if (input.length == invMove) {
 			System.out.println(input[1]);
 		} else {
 			System.out.println(line);
 		}
 	}
 
-// HIER
-	public void updateStatus(String line) {
-		Scanner serverIn = new Scanner(line);
-		serverIn.useDelimiter("\\+");
-		
-		String state = serverIn.next();
-		this.gameState = state;
-		String[] status = gameState.split(";");
-		
-		if (status.length == 3) {
-			this.isCurrentPlayer = status[1].equals(Integer.toString(colour));
-			this.board = new Board(status[2]);
-
-			if (player instanceof NaiveCompPlayer) {
-				((NaiveCompPlayer) player).addToHistory(status[2]);
-			}
-			System.out.println("New game state  = " + this.gameState);
-		} else {
-			System.out.println("Something is wrong with server");
-			System.out.println("Gamestate is incorrect");
-		}
-		serverIn.close();
-	}
-
-//not yet implemented
 	public void gameFinished(String line) {
-		Scanner serverIn = new Scanner(line);
-		serverIn.useDelimiter("\\+");
-		
-		serverIn.close();
+		String[] input = line.split("+");
+		if (input.length == gameFin) {
+			if (input[1].equals(Integer.toString(gameID))) {
+				String[] scores = input[3].split(";");
+				System.out.println("The winner is " + input[2]);
+				System.out.println("Black scored " + scores[0] + " points");
+				System.out.println("White scored " + scores[1] + " points");
+				System.out.println(input[4]);
+			} else {
+				System.out.println(gameIDError);
+				System.out.println(serverError);
+			}
+		} else {
+			System.out.println(commandError + line);
+			System.out.println(serverError);
+		}
+	}
+	
+	public void unknownCommand(String line) {
+		String[] input = line.split("+");
+		if (input.length == unCom) {
+			System.out.println(input[1]);
+		} else {
+			System.out.println(line);
+		}
+	}
+	//------------------ queue ----------------------------
+	public void startQueue() {
+		Thread startQueue = new Thread() {
+			public void run() {
+				queueEventLoop();
+			}
+		};
+		startQueue.start();
+	}
+	
+	// TODO: should have minimum of 1 second before sending to server
+	public void queueEventLoop() {
+		while (!isFinished) {
+			String nextMove = "";
+			try {
+				nextMove = queue.take();
+				if (nextMove.equals("DOMOVE")) {
+					if (playerType.equals("human")) {
+						nextMove = queue.take();
+						String humanMove = player.determineMove(nextMove);
+						if (humanMove != "") {
+							this.sendMessage(humanMove);
+						} else {
+							System.out.println("Invalid move, try again");
+						}	
+					} else {
+						String compMove = player.determineMove(board.getCurrentStringBoard());
+						this.sendMessage(compMove);
+					}
+				}  
+				
+			} catch (InterruptedException e) {
+				System.out.println("Nothing in queue, interrupted");
+				// TODO: log something
+			}	
+		}
 	}
 	
 	// ----------------------------------------------------
@@ -400,7 +438,7 @@ public class Client extends Thread {
 		}
 	}
 	
-// should be used if "quit"
+	// TODO: should be used if "quit"
 	/** close the socket connection. */
 	public void shutdown() {
 		System.out.println("Closing socket connection...");

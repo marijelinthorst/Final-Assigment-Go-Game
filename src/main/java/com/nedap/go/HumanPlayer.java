@@ -1,6 +1,6 @@
 package com.nedap.go;
 
-public class HumanPlayer extends Player {
+public class HumanPlayer extends PlayingPlayer {
 	private int gameID;
 
 	public HumanPlayer(String name, int colour, int gameID) {

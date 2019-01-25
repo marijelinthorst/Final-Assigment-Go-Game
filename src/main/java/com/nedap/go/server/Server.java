@@ -13,7 +13,7 @@ import com.nedap.go.Game;
 import com.nedap.go.Player;
 
 /**
- * Server
+ * Server.
  * 
  * @author marije.linthorst
  *
@@ -25,6 +25,7 @@ public class Server {
 	private static Server server;
 	private int gameIDCount;
 	private Player[] players;
+	private List<GameHandler> gameHandlers;
 
 	/**
 	 * MAIN: Asks for a port number, starts a Server-application and returns the IP
@@ -44,16 +45,19 @@ public class Server {
 			System.exit(0);
 		}
 		try {
-			System.out.println("Server is created. IP address: " + InetAddress.getLocalHost().getHostAddress()
+			System.out.println("Server is created. IP address: " + 
+					InetAddress.getLocalHost().getHostAddress()
 					+ ". Port number: " + sPort);
 		} catch (UnknownHostException e) {
 			System.out.println("ERROR: Localhost is unknown");
 			e.printStackTrace();
 		}
-		server.run();
+		server.runServer();
 	}
 
-	/** CONSTRUCTOR: Constructs a new Server object */
+	/** 
+	 *  CONSTRUCTOR: Constructs a new Server object.
+	 */
 	public Server(int portArg) {
 		this.port = portArg;
 		this.threads = new ArrayList<ClientHandler>();
@@ -66,44 +70,60 @@ public class Server {
 	 * connect. For every new socket connection a new ClientHandler thread is
 	 * started that takes care of the further communication with the Client.
 	 */
-	public void run() {
+	public void runServer() {
 		gameIDCount = 1;
 		try {
 			ServerSocket sSocket = new ServerSocket(this.port);
 			while (true) {
 				System.out.print("Listening to " + port + "\n");
-				Socket localSocket = sSocket.accept();
-				ClientHandler user = new ClientHandler(this, localSocket, 0);
-				user.announce();
+				Socket localSocket = sSocket.accept();		
+				ClientHandler user = new ClientHandler(this, localSocket);
 				user.start();
+				
+				// TODO: nodig?
 				addHandler(user);
+				
+				boolean foundGame = false;
+				if (gameHandlers.isEmpty()) {
+					GameHandler gameHandler = new GameHandler(gameHandlers.size() + 1);
+					gameHandler.addClientHandler(user);
+					gameHandler.runGame();
+					gameHandlers.add(gameHandler);
+				} else {
+					for (int i = 0; i <= gameHandlers.size() && foundGame == false; i++) {
+						if (!gameHandlers.get(i).full()) {
+							gameHandlers.get(i).addClientHandler(user);
+							foundGame = true;
+						} 	
+					}
+					if (foundGame == false) {
+						GameHandler gameHandler = new GameHandler(gameHandlers.size() + 1);
+						gameHandler.addClientHandler(user);
+						gameHandler.runGame();
+						gameHandlers.add(gameHandler);
+					}
+				} 
 
-				if (threads.size() % 2 == 0) {
-
-					// Game game = new Game(players, boardsize, gameIDCount);
-					gameIDCount++;
+					// Game game = new Game(players, boardsize, gameIDCount)
 					// new game with game id (count, starts with one)
 					// Add all clienthandler with game id == 0, to the game, automatic changes game
 					// id player.
-				}
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
-	public void printtoGame(String message, int gameid) {
+	// TODO nodig?
+	public void printtoAllGames(String message, int gameid) {
 		System.out.println(message);
 		for (ClientHandler c : threads) {
-			if (c.getGameID() == gameid) {
-				c.sendMessage(message);
-			}
+			c.sendMessage(message);
 		}
 	}
 
 	/**
 	 * Add a ClientHandler to the collection of ClientHandlers.
-	 * 
 	 * @param handler ClientHandler that will be added
 	 */
 	public void addHandler(ClientHandler handler) {
@@ -112,7 +132,6 @@ public class Server {
 
 	/**
 	 * Remove a ClientHandler from the collection of ClientHanlders.
-	 * 
 	 * @param handler ClientHandler that will be removed
 	 */
 	public void removeHandler(ClientHandler handler) {

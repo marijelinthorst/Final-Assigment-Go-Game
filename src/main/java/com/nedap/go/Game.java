@@ -8,8 +8,6 @@ import java.util.List;
  * score of colour, check if game is finished, gives current status of board do
  * move, pass, remove stone
  * 
- * 
- * 
  * valid move (game his, rules)
  * 
  * @author marije.linthorst
@@ -44,8 +42,8 @@ public class Game {
 		return gameID;
 	}
 
-	public Player currentPlayer() {
-		return players[current];
+	public int currentPlayer() {
+		return players[current].getColour();
 	}
 
 	public int numberOfPasses() {
@@ -76,7 +74,7 @@ public class Game {
 	}
 
 	/**
-	 * returns message about the validity of the move
+	 * returns message about the validity of the move.
 	 * 
 	 * @param index  of the move
 	 * @param colour of the player
@@ -129,7 +127,8 @@ public class Game {
 	 */
 	public void doMove(int index, int colour) {
 		board.setPoint(index, colour);
-		Board copy = board.deepCopy();// is copy nodig?
+		Board copy = board.deepCopy(); 
+		// TODO: is copy nodig?
 		history.add(copy.getCurrentStringBoard());
 		countPasses = 0;
 		current++;
@@ -140,7 +139,7 @@ public class Game {
 
 	/**
 	 * Counts how often the method is called and changes the current player to the
-	 * next player
+	 * next player.
 	 */
 	public void doPass() {
 		countPasses++;

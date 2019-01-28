@@ -8,6 +8,7 @@ public class HumanPlayer extends PlayingPlayer {
 		this.gameID = gameID;
 	}
 
+	//TODO; hint functie
 	/**
 	 * Determines the field for the next move.
 	 * 
@@ -22,13 +23,13 @@ public class HumanPlayer extends PlayingPlayer {
 		} else if (line.startsWith("MOVE")) {
 			return this.move(line);
 		} else {
-			return "";
+			return "INVALID";
 		}
 	}
 
 	// -------- CREATING COMMANDS---------------------------------
 	private String move(String line) {
-		String[] input = line.split(" ");
+		String[] input = line.split("\\,");
 		if (input.length == 2) {
 			String intMove = input[1];
 			return "MOVE+" + gameID + "+" + this.getName() + "+" + intMove;

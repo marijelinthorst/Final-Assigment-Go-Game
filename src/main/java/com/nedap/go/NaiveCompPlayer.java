@@ -25,7 +25,7 @@ public class NaiveCompPlayer extends PlayingPlayer {
 		boolean valid = false;
 		int randomMove = 0;
 		while (!valid) {
-			int upperRange = currentBoard.getBoardSize();
+			int upperRange = currentBoard.getBoardSizeN() * currentBoard.getBoardSizeN() - 1;
 			Random random = new Random();
 			randomMove = random.nextInt(upperRange);
 

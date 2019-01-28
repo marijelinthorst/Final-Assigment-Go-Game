@@ -18,7 +18,7 @@ public class ClientHandler extends Thread {
 	private Server server;
 	private BufferedReader in;
 	private BufferedWriter out;
-	private String clientName;
+	private String clientName = "ClientHandler";
 	private BlockingQueue<String> queue;
 
 	/**
@@ -54,7 +54,11 @@ public class ClientHandler extends Thread {
 	
 	public String readQueue() {
 		try {
-			return queue.take();
+			if (!queue.isEmpty()) {
+				return queue.take();
+			} else {
+				return "EmptyQueue";
+			}
 		} catch (InterruptedException e) {
 			// TODO log something
 			e.printStackTrace();

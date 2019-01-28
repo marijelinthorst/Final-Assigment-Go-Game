@@ -50,7 +50,7 @@ public class ClientTest {
 		}
 
 	}
-	
+	/**
 	@Test
 	public void testdispatchHandshakeLine() {
 		client.dispatchHandshakeLine("huma");
@@ -63,7 +63,7 @@ public class ClientTest {
 		client.dispatchGameConfigurationLine("1,7");
 		assertTrue("Marije".equals(in.nextLine()));
 	}
-	
+	*/
 
 //	@Test
 //	public void test() {

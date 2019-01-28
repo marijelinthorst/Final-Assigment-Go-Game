@@ -49,6 +49,7 @@ public class Client extends Thread {
 	private boolean isGameConfigRequested = false;
 	private boolean isCurrentPlayer = false;
 	private boolean isLeader = false;
+	private boolean handAcked = false;
 	
 	// variables for command length
 	private final int ackHand = 3;
@@ -70,13 +71,20 @@ public class Client extends Thread {
 	 * Starts the user and server input.
 	 */
 	public static void main(String[] args) {
-
 		Scanner in = new Scanner(System.in);
-		System.out.println("Enter name, IP address and port number");
-		clientName = in.hasNext() ? in.next() : null;
-		String sIP = in.hasNext() ? in.next() : null;
-		String sPort = in.hasNext() ? in.next() : null;
-		in.close();
+		String sIP = null;
+		String sPort = null;
+		
+		if (args.length == 0) {
+			System.out.println("Enter name, IP address and port number");
+			clientName = in.hasNext() ? in.next() : null;
+			sIP = in.hasNext() ? in.next() : null;
+			sPort = in.hasNext() ? in.next() : null;
+		} else {
+			clientName = args[0];
+			sIP = args[1];
+			sPort = args[2];
+		}
 
 		if (clientName == null || sIP == null || sPort == null) {
 			System.out.println(USAGE);
@@ -99,7 +107,7 @@ public class Client extends Thread {
 
 		try {
 			Client client = new Client(clientName, host, port);
-			client.startUserInput();
+			client.startUserInput(in);
 			client.startServerInput();
 
 		} catch (IOException e) {
@@ -121,22 +129,26 @@ public class Client extends Thread {
 	}
 	
 	//---------------- user input ---------------------------------
-	public void startUserInput() {
+	public void startUserInput(Scanner userIn) {
 		Thread userInTread = new Thread() {
 			public void run() {
-				userEventLoop();
+				userEventLoop(userIn);
 			}
 		};
 		userInTread.start();
 	}
 	
-	public void userEventLoop() {
-		Scanner userIn = new Scanner(System.in);
+	public void userEventLoop(Scanner userIn) {
+		boolean questAsked = false;
 		while (!isFinished) {
-			showPrompt();
+			while (!questAsked) {
+				showPrompt();
+				questAsked = true;
+			}	
 			if (userIn.hasNext()) {
 				String inputLine = userIn.nextLine();
 				dispatchUILine(inputLine);
+				questAsked = false;
 			}
 		}
 		userIn.close();
@@ -155,8 +167,8 @@ public class Client extends Thread {
             
         } else if (isCurrentPlayer && playerType.equals("human")) {
         	System.out.println(board.toTUIString());
-            System.out.println("Please enter your next move. Type \"MOVE\" followed by an index,"
-            		+ "\"PASS\" or \"EXIT\"");
+            System.out.println("Please enter your next move. Type \"MOVE\" followed "
+            		+ "by an index and separated by a \",\", \"PASS\" or \"EXIT\"");
         }
 	}
 	
@@ -198,12 +210,24 @@ public class Client extends Thread {
     
 	
 	public void dispatchGamePlayLine(String line) {
+		// EXIT+$GAME_ID+$PLAYER_NAME
+		// MOVE+$GAME_ID+$PLAYER_NAME+$TILE_INDEX
 		if (playerType.equals("human")) {
 			if (line.equals("EXIT")) {
 				queue.add(line);
 				// TODO: implement quit
+			} else if (line.equals("PASS")) {
+				queue.add(line);
+			} else if (line.startsWith("MOVE")) {
+				String[] input = line.split("\\,");
+				if (input.length == 2) {
+					queue.add(line);
+					System.out.println("Move is added to queue");
+				} else {
+					System.out.println("Move requires 2 arguments");
+				}
 			} else {
-				queue.add(line);	
+				System.out.println("Command unknown: choose move, pass or exit");
 			}
 		}
     }
@@ -236,6 +260,7 @@ public class Client extends Thread {
 			System.out.println("Handshake acknowledged");
 			this.ackHandshake(inputLine);
 		} else if (inputLine.startsWith("REQUEST_CONFIG")) {
+			System.out.println("Config requested");
 			this.isGameConfigRequested = true;
 		} else if (inputLine.startsWith("ACKNOWLEDGE_CONFIG")) {
 			this.ackConfig(inputLine);
@@ -257,11 +282,12 @@ public class Client extends Thread {
 	
 	// ----------- dealing with server commands --------------------------
 	public void ackHandshake(String line) {
-		String[] input = line.split("+");
+		String[] input = line.split("\\+");
 		if (input.length == ackHand) {
 			try {
 				gameID = Integer.parseInt(input[1]);
 				isLeader = Integer.parseInt(input[2]) == 1;
+				System.out.println("isLeader=" + isLeader);
 			} catch (NumberFormatException e) {
 				//TODO: log something
 				System.out.println("GameID and/or leader is/are no integer(s).");
@@ -274,7 +300,7 @@ public class Client extends Thread {
 	}
 
 	public void ackConfig(String line) {
-		String[] input = line.split("+");
+		String[] input = line.split("\\+");
 		if (input.length == ackConfig) {
 			clientName = input[1];
 			String gameState = input[4];
@@ -315,12 +341,16 @@ public class Client extends Thread {
 	}
 	
 	public void doMove(String gameStatus) {
-		String[] status = gameStatus.split(";");
+		String[] status = gameStatus.split("\\;");
 		if (status.length == gameSt) {
 			this.board = new Board(status[2]);
 			if (status[1].equals(Integer.toString(player.getColour()))) {
 				this.isCurrentPlayer = true;
 				queue.add("DOMOVE");				
+			} else {
+				System.out.println("Waiting on other player. Current board:");
+				System.out.println(board.toTUIString());
+				this.isCurrentPlayer = false;
 			}
 		} else {
 			System.out.println("Gamestate is incorrect");
@@ -330,7 +360,7 @@ public class Client extends Thread {
 
 	public void ackMove(String line) {
 		// TODO: status 2 = move/pass
-		String[] input = line.split("+");
+		String[] input = line.split("\\+");
 		if (input.length == ackMove) {
 			try {
 				if (Integer.parseInt(input[1]) == gameID) {
@@ -352,19 +382,20 @@ public class Client extends Thread {
 	}	
 
 	public void invalidMove(String line) {
-		String[] input = line.split("+");
+		String[] input = line.split("\\+");
 		if (input.length == invMove) {
 			System.out.println(input[1]);
+			queue.add("DOMOVE");
 		} else {
 			System.out.println(line);
 		}
 	}
 
 	public void gameFinished(String line) {
-		String[] input = line.split("+");
+		String[] input = line.split("\\+");
 		if (input.length == gameFin) {
 			if (input[1].equals(Integer.toString(gameID))) {
-				String[] scores = input[3].split(";");
+				String[] scores = input[3].split("\\;");
 				System.out.println("The winner is " + input[2]);
 				System.out.println("Black scored " + scores[0] + " points");
 				System.out.println("White scored " + scores[1] + " points");
@@ -380,7 +411,7 @@ public class Client extends Thread {
 	}
 	
 	public void unknownCommand(String line) {
-		String[] input = line.split("+");
+		String[] input = line.split("\\+");
 		if (input.length == unCom) {
 			System.out.println(input[1]);
 		} else {
@@ -407,10 +438,12 @@ public class Client extends Thread {
 					if (playerType.equals("human")) {
 						nextMove = queue.take();
 						String humanMove = player.determineMove(nextMove);
-						if (humanMove != "") {
+						if (humanMove != "INVALID") {
 							this.sendMessage(humanMove);
 						} else {
 							System.out.println("Invalid move, try again");
+							System.out.println(nextMove);
+							System.out.println(humanMove);
 						}	
 					} else {
 						String compMove = player.determineMove(board.getCurrentStringBoard());

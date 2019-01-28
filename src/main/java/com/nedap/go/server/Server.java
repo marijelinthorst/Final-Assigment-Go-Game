@@ -32,10 +32,15 @@ public class Server {
 	 * address and port number.
 	 */
 	public static void main(String[] args) {
-		System.out.println("Enter port number: ");
-		Scanner in = new Scanner(System.in);
-		String sPort = in.hasNextLine() ? in.nextLine() : null;
-		in.close();
+		String sPort = null;
+		if (args.length == 0) {
+			System.out.println("Enter port number: ");
+			Scanner in = new Scanner(System.in);
+			sPort = in.hasNextLine() ? in.nextLine() : null;
+		} else {
+			sPort = args[0];
+			
+		}
 
 		try {
 			server = new Server(Integer.parseInt(sPort));
@@ -61,6 +66,7 @@ public class Server {
 	public Server(int portArg) {
 		this.port = portArg;
 		this.threads = new ArrayList<ClientHandler>();
+		gameHandlers = new ArrayList<GameHandler>();
 	}
 
 	// --------------COMMANDS ---------------
@@ -77,6 +83,7 @@ public class Server {
 			while (true) {
 				System.out.print("Listening to " + port + "\n");
 				Socket localSocket = sSocket.accept();		
+				System.out.println("client found");
 				ClientHandler user = new ClientHandler(this, localSocket);
 				user.start();
 				
@@ -85,21 +92,24 @@ public class Server {
 				
 				boolean foundGame = false;
 				if (gameHandlers.isEmpty()) {
+					System.out.println("no games");
 					GameHandler gameHandler = new GameHandler(gameHandlers.size() + 1);
 					gameHandler.addClientHandler(user);
-					gameHandler.runGame();
+					gameHandler.start();
 					gameHandlers.add(gameHandler);
 				} else {
 					for (int i = 0; i <= gameHandlers.size() && foundGame == false; i++) {
 						if (!gameHandlers.get(i).full()) {
 							gameHandlers.get(i).addClientHandler(user);
+							System.out.println("tweede speler vind game");
 							foundGame = true;
 						} 	
 					}
 					if (foundGame == false) {
+						System.out.println("tweede speler start nieuwe game");
 						GameHandler gameHandler = new GameHandler(gameHandlers.size() + 1);
 						gameHandler.addClientHandler(user);
-						gameHandler.runGame();
+						gameHandler.start();
 						gameHandlers.add(gameHandler);
 					}
 				} 

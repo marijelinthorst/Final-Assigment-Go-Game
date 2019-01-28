@@ -50,8 +50,12 @@ public class Game {
 		return countPasses;
 	}
 
-	public int getBoardSize() {
-		return board.getBoardSize();
+	public int getBoardSizeN() {
+		return board.getBoardSizeN();
+	}
+	
+	public String getCurrentBoard() {
+		return board.getCurrentStringBoard();
 	}
 
 	public double getScore(int colour) {
@@ -102,14 +106,14 @@ public class Game {
 	/**
 	 * Returns player that has won. <br>
 	 */
-	public Player determineWinner() {
+	public String determineWinner() {
 		Player winner = players[0];
 		for (int i = 1; i < players.length; i++) {
 			if (winner.getScore(this) < players[i].getScore(this)) {
 				winner = players[i];
 			}
 		}
-		return winner;
+		return winner.getName();
 	}
 
 	/**

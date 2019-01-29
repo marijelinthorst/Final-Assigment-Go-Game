@@ -16,6 +16,7 @@ import com.nedap.go.Board;
 import com.nedap.go.HumanPlayer;
 import com.nedap.go.NaiveCompPlayer;
 import com.nedap.go.PlayingPlayer;
+import com.nedap.go.gui.GoGuiIntegrator;
 
 /**
  * Client.
@@ -41,6 +42,7 @@ public class Client extends Thread {
 	private String opponant;
 	private Board board;
 	private BlockingQueue<String> queue;
+	private GoGuiIntegrator gui;
 	
 	// booleans which determine status of client
 	private boolean isFinished = false;
@@ -49,7 +51,8 @@ public class Client extends Thread {
 	private boolean isGameConfigRequested = false;
 	private boolean isCurrentPlayer = false;
 	private boolean isLeader = false;
-	private boolean handAcked = false;
+	private boolean serverReady = true;
+	private boolean hasReadConfiguration = false;
 	
 	// variables for command length
 	private final int ackHand = 3;
@@ -139,43 +142,58 @@ public class Client extends Thread {
 	}
 	
 	public void userEventLoop(Scanner userIn) {
-		boolean questAsked = false;
 		while (!isFinished) {
-			while (!questAsked) {
+			//System.out.println("Server is " + (serverReady ? "": "not") + " ready");
+			try {
+				Thread.sleep(250);
+			} catch (InterruptedException e) { // has slept a bit
+			}
+			boolean hasInput = false;
+			try {
+				hasInput = System.in.available() > 0;
+			} catch (IOException e) { // has no input :) 
+			}
+			if (shouldAskInput() || hasInput) {			
 				showPrompt();
-				questAsked = true;
-			}	
-			if (userIn.hasNext()) {
-				String inputLine = userIn.nextLine();
-				dispatchUILine(inputLine);
-				questAsked = false;
+				if (userIn.hasNext()) {
+					String inputLine = userIn.nextLine();
+					dispatchUILine(inputLine);
+				}	
 			}
 		}
 		userIn.close();
 	}
+
+	private boolean shouldAskInput() {
+		return serverReady && (isCurrentPlayer || stillNeedConfiguration() || !isHandshakeSent);
+	}
 	
 	public void showPrompt() {
+		System.out.println("Going to show prompt");
 		if (!isHandshakeSent) {
             System.out.println("Please enter \"human\" or \"comp\"");
 		} else if (!isGameConfigured) {
-			if (isLeader && isGameConfigRequested) {
+			if (stillNeedConfiguration()) {
 				System.out.println("Please enter the preferred colour and "
 						+ "desired width of the game board, seperated by a \",\"");
-			} else {
-				System.out.println("Waiting on other player to configurate the game");
-			}
-            
+			} 
         } else if (isCurrentPlayer && playerType.equals("human")) {
-        	System.out.println(board.toTUIString());
             System.out.println("Please enter your next move. Type \"MOVE\" followed "
             		+ "by an index and separated by a \",\", \"PASS\" or \"EXIT\"");
+            System.out.println("Current board:");
+            System.out.println(board.toTUIString());
+            this.updateGUI();
         }
+	}
+
+	private boolean stillNeedConfiguration() {
+		return (isLeader || isGameConfigRequested) && !hasReadConfiguration;
 	}
 	
 	public void dispatchUILine(String inputLine) {
 		if (!isHandshakeSent) {
             dispatchHandshakeLine(inputLine);
-        } else if (!isGameConfigured && isGameConfigRequested) {
+        } else if (stillNeedConfiguration()) {
             dispatchGameConfigurationLine(inputLine);
         } else if (isCurrentPlayer) {
             dispatchGamePlayLine(inputLine);
@@ -199,8 +217,8 @@ public class Client extends Thread {
 				int prefColour = Integer.parseInt(input[0]);
 				int prefBoardSize = Integer.parseInt(input[1]);
 				this.sendMessage("SET_CONFIG+" + gameID + "+" + prefColour + "+" + prefBoardSize);
+				hasReadConfiguration = true;
 			} catch (NumberFormatException e) {
-				//TODO: log something
 				System.out.println("Preferred colour and board size need to be integers");
 			}
 		} else {
@@ -278,6 +296,7 @@ public class Client extends Thread {
 			System.out.println(serverError);
 			System.out.println("Command is unknown (" + inputLine + ")");
 		}
+		serverReady = true;
 	}
 	
 	// ----------- dealing with server commands --------------------------
@@ -311,6 +330,9 @@ public class Client extends Thread {
 				
 				this.makePlayer(colour);
 				this.startQueue();
+				gui = new GoGuiIntegrator(true, true, size);
+				gui.startGUI();
+				gui.clearBoard();
 				this.doMove(gameState);
 
 				System.out.println("Configuration succesful.");
@@ -350,6 +372,7 @@ public class Client extends Thread {
 			} else {
 				System.out.println("Waiting on other player. Current board:");
 				System.out.println(board.toTUIString());
+				this.updateGUI();
 				this.isCurrentPlayer = false;
 			}
 		} else {
@@ -462,6 +485,7 @@ public class Client extends Thread {
 	/** send a message to a ClientHandler. */
 	public void sendMessage(String msg) {
 		try {
+			serverReady = false;
 			this.out.write(msg);
 			this.out.newLine();
 			this.out.flush();
@@ -482,17 +506,18 @@ public class Client extends Thread {
 			e.printStackTrace();
 		}
 	}
-
-	/** returns the client name. 
-	public String getClientName() {
-		return clientName;
+	
+	// ----------------- GUI ---------------------
+	
+	public void updateGUI() {
+		gui.clearBoard();
+		for (int i = 0; i < board.getBoardSizeN() * board.getBoardSizeN(); i++) {
+			if (board.getPoint(i) != 0) {
+				boolean white = board.getPoint(i) == 2;
+				int x = i % board.getBoardSizeN();
+				int y = i / board.getBoardSizeN();
+				gui.addStone(x, y, white);
+			}
+		}
 	}
-	*/
-
-	/** prints message to console of this client. 
-	private static void print(String message) {
-		System.out.println(message);
-	}
-	*/
-
 }

@@ -25,6 +25,8 @@ public class GameHandler extends Thread {
 	private ClientHandler opponant;
 	private int prefColour;
 	
+	private int rematchCount;
+	
 	// States
 	private boolean isFinished;
 	private boolean isConfigured;
@@ -48,6 +50,7 @@ public class GameHandler extends Thread {
 		isFinished = false;
 		isConfigured = false;
 		handshakesCount = 0;
+		rematchCount = 0;
 		player1 = "";
 		player2 = "";
 		cHandlers = new CopyOnWriteArrayList<ClientHandler>();
@@ -91,15 +94,31 @@ public class GameHandler extends Thread {
 					this.handle(gameInput, white);
 				}
 			}
-			isFinished = game.isFinished();
+			
+			if (game.isFinished()) {
+				int requestRematch = 0;
+				// TODO: requestRematch depends on disconnects
+				while (requestRematch != this.cHandlers.size()) {
+					this.requestRematch();
+					for (ClientHandler player: cHandlers) {
+						String input = player.readQueue();
+						if (!input.equals("EmptyQueue")) { 
+							this.handleSetRematch(input);
+							requestRematch++;
+						}
+					}
+				}
+				if (rematchCount == this.cHandlers.size()){
+					this.resetGame();
+				} else {
+					for (ClientHandler player: cHandlers) {
+						player.sendMessage("ACKNOWLEDGE_REMATCH+0");
+						isFinished = true;
+					}
+				}
+			}			
 		}
-		
-		// TODO: REQUEST_REMATCH
-		// if (input.startsWith("SET_REMATCH")) {
-		//this.handleSetRematch(input);
-		//}
-		// game.reset --> maak board leeg en current player weer 0
-		// stuur ack config
+		// TODO: als iemand weg gaat, gameFinished try en verwijder diegene uit lijst
 	}
 	
 	// --------------- Handle user input before game -----------------------------
@@ -217,7 +236,7 @@ public class GameHandler extends Thread {
 			// TODO: try
 			if (move[1].equals(Integer.toString(gameID)) && 
 					move[2].equals(playingPlayer.getName())) {
-				if (move[2].equals(Integer.toString(pass))) {
+				if (moveInt == pass) {
 					game.doPass();
 					sendAckMove(pass, playingPlayer.getColour());
 				} else {
@@ -266,6 +285,7 @@ public class GameHandler extends Thread {
 				+ game.getScore(1) + ";" + game.getScore(2) + "+" + reason;
 		black.sendMessage(message);
 		white.sendMessage(message);
+		// TODO: dit moet niet hier?
 		this.isFinished = true;
 	}
 	
@@ -299,11 +319,32 @@ public class GameHandler extends Thread {
 	
 	// TODO: send rematch request
 	
+	public void requestRematch() {
+		for (ClientHandler player: cHandlers) {
+			player.sendMessage("REQUEST_REMATCH");
+		}
+	}
+	
+	public void resetGame() {
+		for (ClientHandler player: cHandlers) {
+			player.sendMessage("ACKNOWLEDGE_REMATCH+0");
+		}
+		isFinished = false;
+		isConfigured = false;
+		handshakesCount = 0;
+		rematchCount = 0;
+		player1 = "";
+		player2 = "";
+		cHandlers.clear();
+		isWaiting = false;
+	}
+	
 	public void handleSetRematch(String input) {
 		String[] setRematch = input.split("\\+");
 		if (setRematch.length == rematchL) {
-			// do something
-			// move -1 is pass
+			if (setRematch[1].equals("1")) {
+				rematchCount++;
+			}
 		} else {
 			System.out.println(unknown + "Set rematch command length is not 3");
 		}

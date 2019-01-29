@@ -53,6 +53,7 @@ public class Client extends Thread {
 	private boolean isLeader = false;
 	private boolean serverReady = true;
 	private boolean hasReadConfiguration = false;
+	private boolean rematchRequested = false;
 	
 	// variables for command length
 	private final int ackHand = 3;
@@ -64,6 +65,7 @@ public class Client extends Thread {
 	private final int gameFin = 5;	
 	private final int gameSt = 3;
 	private final int moveL = 2;
+	private final int ackRematch = 2;
 	
 	// common error messages
 	private String serverError = "Something is wrong with the server";
@@ -148,11 +150,13 @@ public class Client extends Thread {
 				Thread.sleep(250);
 			} catch (InterruptedException e) { // has slept a bit
 			}
+			
 			boolean hasInput = false;
 			try {
 				hasInput = System.in.available() > 0;
 			} catch (IOException e) { // has no input :) 
 			}
+			
 			if (shouldAskInput() || hasInput) {			
 				showPrompt();
 				if (userIn.hasNext()) {
@@ -165,7 +169,8 @@ public class Client extends Thread {
 	}
 
 	private boolean shouldAskInput() {
-		return serverReady && (isCurrentPlayer || stillNeedConfiguration() || !isHandshakeSent);
+		return serverReady && (isCurrentPlayer || stillNeedConfiguration() || !isHandshakeSent 
+				|| rematchRequested);
 	}
 	
 	public void showPrompt() {
@@ -177,6 +182,8 @@ public class Client extends Thread {
 				System.out.println("Please enter the preferred colour and "
 						+ "desired width of the game board, seperated by a \",\"");
 			} 
+        } else if (rematchRequested) {
+        	System.out.println("Would you like a rematch? Answer \"yes\" or \"no.\"");
         } else if (isCurrentPlayer && playerType.equals("human")) {
             System.out.println("Please enter your next move. Type \"MOVE\" followed "
             		+ "by an index and separated by a \",\", \"PASS\" or \"EXIT\"");
@@ -195,6 +202,8 @@ public class Client extends Thread {
             dispatchHandshakeLine(inputLine);
         } else if (stillNeedConfiguration()) {
             dispatchGameConfigurationLine(inputLine);
+        } else if (rematchRequested) {
+        	dispatchSetRematchLine(inputLine);
         } else if (isCurrentPlayer) {
             dispatchGamePlayLine(inputLine);
         }
@@ -226,6 +235,20 @@ public class Client extends Thread {
 		}
 	}
     
+	public void dispatchSetRematchLine(String line) {
+		if (line.equals("yes")) {
+			this.sendMessage("SET_REMATCH+1");
+			isCurrentPlayer = false;
+			isLeader = false;
+			rematchRequested = false;
+		} else if (line.equals("no")) {
+			this.sendMessage("SET_REMATCH+2");
+			System.out.println("Thank you for playing! Bye.");
+			isFinished = true;
+		} else {
+			System.out.println("Please answer \"yes\" or \"no.\"");
+		}
+	}
 	
 	public void dispatchGamePlayLine(String line) {
 		// EXIT+$GAME_ID+$PLAYER_NAME
@@ -289,7 +312,10 @@ public class Client extends Thread {
 			this.invalidMove(inputLine);
 		} else if (inputLine.startsWith("GAME_FINISHED")) {
 			this.gameFinished(inputLine);
-			isFinished = true;
+		} else if (inputLine.equals("REQUEST_REMATCH")) {
+			rematchRequested = true;
+		} else if (inputLine.startsWith("ACKNOWLEDGE_REMATCH")) {
+			this.ackRematch(inputLine);
 		} else if (inputLine.startsWith("UNKNOWN_COMMAND")) {
 			this.unknownCommand(inputLine);
 		} else {
@@ -425,6 +451,29 @@ public class Client extends Thread {
 				System.out.println(input[4]);
 			} else {
 				System.out.println(gameIDError);
+				System.out.println(serverError);
+			}
+		} else {
+			System.out.println(commandError + line);
+			System.out.println(serverError);
+		}
+	}
+	
+	public void ackRematch(String line) {
+		String[] input = line.split("\\+");
+		if (input.length == ackRematch) {
+			if (input[1].equals("1")) {
+				isFinished = false;
+				isHandshakeSent = false;
+				isGameConfigured = false;
+				isGameConfigRequested = false;
+				serverReady = true;
+				hasReadConfiguration = false;
+			} else if (input[1].equals("0")) {
+				System.out.println("There will be no rematch. Thank you for playing! Bye.");
+				isFinished = true;
+			} else {
+				System.out.println(commandError + line);
 				System.out.println(serverError);
 			}
 		} else {

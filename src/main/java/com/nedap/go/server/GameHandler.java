@@ -223,10 +223,10 @@ public class GameHandler extends Thread {
 				} else {
 					if (game.isValidMove(moveInt, playingPlayer.getColour()).equals("Move valid")) {
 						game.doMove(moveInt, playingPlayer.getColour());
-						game.removeCaptured(capturedColour, playingPlayer.getColour());
+						game.removeCaptured(capturedColour, playingPlayer.getColour(), game.getBoard());
 						// need to check both ways since you can suicide a group and don't recreate
 						// a previous board state (since the other player did moves)
-						game.removeCaptured(playingPlayer.getColour(), capturedColour);
+						game.removeCaptured(playingPlayer.getColour(), capturedColour, game.getBoard());
 						sendAckMove(moveInt, playingPlayer.getColour());
 					} else {
 						colour.sendMessage(invalidM + 

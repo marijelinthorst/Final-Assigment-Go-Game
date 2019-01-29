@@ -61,12 +61,16 @@ public class Game {
 	public String getCurrentBoard() {
 		return board.getCurrentStringBoard();
 	}
+	
+	public Board getBoard() {
+		return this.board;
+	}
 
 	public double getScore(int colour) {
 		int score = 0;
-		score = score + this.getPointsofColour(colour).size();
+		score = score + this.getPointsofColour(colour, this.board).size();
 		
-		List<Integer> emptyStones = this.getPointsofColour(0);
+		List<Integer> emptyStones = this.getPointsofColour(0, this.board);
 		List<List<Integer>> emptyGroups = this.determineGroups(emptyStones);
 		for (List<Integer> group : emptyGroups) {
 			int count = 0;
@@ -103,22 +107,27 @@ public class Game {
 	 * @return
 	 */
 	public String isValidMove(int index, int colour) {
-		// TODO
-		// check for captures and remove stuff if needed
-		// check if its the right colour to doMove
 		if (!board.onBoard(index)) {
 			return "Move invalid: not on board";
 		}
 		if (!board.isEmpty(index)) {
 			return "Move invalid: point not empty";
 		}
+		
 		Board copy = board.deepCopy();
 		copy.setPoint(index, colour);
-		// check captured enzo
+		int capturedColour = 10;
+		if (colour == 1) {
+			capturedColour = 2;
+		} else if (colour == 2) {
+			capturedColour = 1;
+		}
+		this.removeCaptured(capturedColour, colour, copy);
+		this.removeCaptured(colour, capturedColour, copy);
+		
 		if (history.contains(copy.getCurrentStringBoard())) {
 			return "Move invalid: creates a previous board state";
 		}
-		// rules: check rules etc
 		return "Move valid";
 	}
 
@@ -187,8 +196,8 @@ public class Game {
 		}
 	}
 	
-	public void removeCaptured(int capturedColour, int otherColour) {	
-		List<Integer> stonesOfColour = this.getPointsofColour(capturedColour);
+	public void removeCaptured(int capturedColour, int otherColour, Board board) {	
+		List<Integer> stonesOfColour = this.getPointsofColour(capturedColour, board);
 		List<List<Integer>> groupsOfColour = this.determineGroups(stonesOfColour);
 		for (List<Integer> group : groupsOfColour) {
 			int count = 0;
@@ -250,7 +259,7 @@ public class Game {
 	 * @param colour
 	 * @return List<Integer>
 	 */
-	public List<Integer> getPointsofColour(int colour) {
+	public List<Integer> getPointsofColour(int colour, Board board) {
 		int n = this.getBoardSizeN();
 		List<Integer> points = new ArrayList<Integer>();
 		for (int i = 0; i < n * n; i++) {
@@ -350,5 +359,11 @@ public class Game {
 		}
 		
 		return groupsNeighbours;
-	}	
+	}
+	
+	// ------------- for comp player -------------
+	public void updateBoard(String board) {
+		history.add(board);
+		this.board = new Board(board);
+	}
 }

@@ -68,8 +68,8 @@ public class GroupTest {
 	
 	@Test
 	public void testgetPointsofColour() {
-		assertTrue(colour1.containsAll(game.getPointsofColour(1)));
-		assertTrue(colour2.containsAll(game.getPointsofColour(2)));
+		assertTrue(colour1.containsAll(game.getPointsofColour(1, game.getBoard())));
+		assertTrue(colour2.containsAll(game.getPointsofColour(2, game.getBoard())));
 	}
 	
 	@Test
@@ -113,7 +113,7 @@ public class GroupTest {
 		game.doMove(25, 1);
 		game.doMove(30, 1);
 		System.out.println(game.getTUIboard());
-		game.removeCaptured(2, 1);
+		game.removeCaptured(2, 1, game.getBoard());
 		System.out.println(game.getTUIboard());
 	}
 	
@@ -122,7 +122,7 @@ public class GroupTest {
 		game.doMove(18, 1);
 		game.doMove(25, 1);
 		game.doMove(30, 1);
-		game.removeCaptured(2, 1);
+		game.removeCaptured(2, 1, game.getBoard());
 		
 		System.out.println(game.getScore(1));
 		System.out.println(game.getScore(2));

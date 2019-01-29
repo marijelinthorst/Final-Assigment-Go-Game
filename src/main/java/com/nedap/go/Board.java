@@ -91,7 +91,7 @@ public class Board {
 	 * @return
 	 */
 	public int getBoardSizeN() {
-		return points.length;
+		return BSIZE;
 	}
 
 	/**

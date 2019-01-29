@@ -113,7 +113,6 @@ public class Server {
 						gameHandlers.add(gameHandler);
 					}
 				} 
-
 					// Game game = new Game(players, boardsize, gameIDCount)
 					// new game with game id (count, starts with one)
 					// Add all clienthandler with game id == 0, to the game, automatic changes game

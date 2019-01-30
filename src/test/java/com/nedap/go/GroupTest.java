@@ -104,7 +104,8 @@ public class GroupTest {
 	@Test
 	public void testgetGroupsNeighbours() {
 		List<Integer> group2Colour1 = Arrays.asList(28, 34);
-		System.out.println(Arrays.toString(game.getGroupsNeighbours(group2Colour1)));
+		int[] result = {35, 33, 29, 27, 22};
+		Arrays.equals(result, game.getGroupsNeighbours(group2Colour1));
 	}
 	
 	@Test
@@ -112,9 +113,9 @@ public class GroupTest {
 		game.doMove(18, 1);
 		game.doMove(25, 1);
 		game.doMove(30, 1);
-		System.out.println(game.getTUIboard());
+		assertTrue(game.getCurrentBoard().equals("000022011000003330103030210010102010"));
 		game.removeCaptured(2, 1, game.getBoard());
-		System.out.println(game.getTUIboard());
+		assertTrue(game.getCurrentBoard().equals("000022011000003330103030010010102010"));
 	}
 	
 	@Test
@@ -123,9 +124,15 @@ public class GroupTest {
 		game.doMove(25, 1);
 		game.doMove(30, 1);
 		game.removeCaptured(2, 1, game.getBoard());
-		
-		System.out.println(game.getScore(1));
-		System.out.println(game.getScore(2));
-		System.out.println(game.getScore(3));
+		assertTrue(game.getScore(1) == 8.0);
+		assertTrue(game.getScore(2) == 3.5);
+		assertTrue(game.getScore(3) == 5.5);
+	}
+	
+	@Test
+	public void testdetermineWinner() {
+		game.doMove(0, 1);
+		String winner = game.determineWinner();
+		assertTrue(winner.equals("Piet"));
 	}
 }

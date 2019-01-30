@@ -6,32 +6,24 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class PlayerTest {
-  private Player one;
-  private Player two;
+	private Player one;
+	private Player two;
 
-  @Before
-  public void setUp() {
-    one = new Player("Klaas", 1);
-    two = new Player("Piet", 2);
-  }
+	@Before
+	public void setUp() {
+		one = new Player("Klaas", 1);
+		two = new Player("Piet", 2);
+	}
 
-  @Test
-  public void testgetName() {
-    assertEquals(one.getName(), "Klaas");
-    assertEquals(two.getName(), "Piet");
-  }
-  
-  @Test
-  public void testgetColour() {
-    assertEquals(one.getColour(), 1);
-    assertEquals(two.getColour(), 2);
-  }
-  
-  @Test
-  public void testgetScore() {
-    fail("game.getScore(colour) not yet implemented");
-  }
+	@Test
+	public void testgetName() {
+		assertEquals(one.getName(), "Klaas");
+		assertEquals(two.getName(), "Piet");
+	}
 
-
-
+	@Test
+	public void testgetColour() {
+		assertEquals(one.getColour(), 1);
+		assertEquals(two.getColour(), 2);
+	}
 }

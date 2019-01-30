@@ -18,7 +18,6 @@ public class ClientHandler extends Thread {
 	private Server server;
 	private BufferedReader in;
 	private BufferedWriter out;
-	private String clientName = "ClientHandler";
 	private BlockingQueue<String> queue;
 
 	/**
@@ -39,16 +38,13 @@ public class ClientHandler extends Thread {
 	 * that the socket connection is broken and shutdown() will be called.
 	 */
 	public void run() {
-		
 		try {
 			String input;
 			while ((input = in.readLine()) != null) {
 				queue.add(input);
 			}
-			shutdown();
 		} catch (IOException e) {
-			e.printStackTrace();
-			shutdown();
+			queue.add("FAIL");
 		}
 	}
 	
@@ -60,7 +56,7 @@ public class ClientHandler extends Thread {
 				return "EmptyQueue";
 			}
 		} catch (InterruptedException e) {
-			// TODO log something
+			System.out.println("InterruptedException of queue");
 			e.printStackTrace();
 		}
 		return "";
@@ -79,8 +75,7 @@ public class ClientHandler extends Thread {
 			this.out.newLine();
 			this.out.flush();
 		} catch (IOException e) {
-			e.printStackTrace();
-			shutdown();
+			queue.add("FAIL");
 		}
 	}
 
@@ -90,8 +85,8 @@ public class ClientHandler extends Thread {
 	 * in the chat.
 	 */
 	// TODO shutdown does not tell the server
-	private void shutdown() {
+	public void shutdown() {
 		server.removeHandler(this);
-		System.out.println("[" + clientName + " has left]");
+		System.out.println("A Client(Handler) has disconnected");
 	}
 }

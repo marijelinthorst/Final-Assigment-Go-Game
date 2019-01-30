@@ -31,7 +31,7 @@ public class Client extends Thread {
 	private static int port;
 	private static String clientName;
 	private Socket sock;
-	private Scanner in;
+	private BufferedReader in;
 	private BufferedWriter out;
 	
 	// variables for playing the game
@@ -43,6 +43,8 @@ public class Client extends Thread {
 	private Board board;
 	private BlockingQueue<String> queue;
 	private GoGuiIntegrator gui;
+	private int defaultsize = 19;
+	private Thread startQueue;
 	
 	// booleans which determine status of client
 	private boolean isFinished = false;
@@ -128,9 +130,11 @@ public class Client extends Thread {
 		clientName = name;
 		this.sock = new Socket(host, port);
 		System.out.println("Socket created");
-		this.in = new Scanner(new BufferedReader(new InputStreamReader(sock.getInputStream())));
+		this.in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
 		this.out = new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()));
 		queue = new ArrayBlockingQueue<String>(5);
+		gui = new GoGuiIntegrator(true, true, defaultsize);
+		gui.startGUI();
 	}
 	
 	//---------------- user input ---------------------------------
@@ -158,7 +162,9 @@ public class Client extends Thread {
 			}
 			
 			if (shouldAskInput() || hasInput) {			
-				showPrompt();
+				if (shouldAskInput()) {
+					showPrompt();
+				}
 				if (userIn.hasNext()) {
 					String inputLine = userIn.nextLine();
 					dispatchUILine(inputLine);
@@ -198,7 +204,12 @@ public class Client extends Thread {
 	}
 	
 	public void dispatchUILine(String inputLine) {
-		if (!isHandshakeSent) {
+		if (inputLine.equals("EXIT")) {
+			// EXIT+$GAME_ID+$PLAYER_NAME
+			gui.stopGUI();
+			this.sendMessage("EXIT+" + gameID + "+" + player.getName());
+			this.shutdown();
+		} else if (!isHandshakeSent) {
             dispatchHandshakeLine(inputLine);
         } else if (stillNeedConfiguration()) {
             dispatchGameConfigurationLine(inputLine);
@@ -242,22 +253,18 @@ public class Client extends Thread {
 			isLeader = false;
 			rematchRequested = false;
 		} else if (line.equals("no")) {
-			this.sendMessage("SET_REMATCH+2");
-			System.out.println("Thank you for playing! Bye.");
 			isFinished = true;
+			this.sendMessage("SET_REMATCH+2");	
+			this.shutdown();
 		} else {
 			System.out.println("Please answer \"yes\" or \"no.\"");
 		}
 	}
 	
 	public void dispatchGamePlayLine(String line) {
-		// EXIT+$GAME_ID+$PLAYER_NAME
 		// MOVE+$GAME_ID+$PLAYER_NAME+$TILE_INDEX
 		if (playerType.equals("human")) {
-			if (line.equals("EXIT")) {
-				queue.add(line);
-				// TODO: implement quit
-			} else if (line.equals("PASS")) {
+			if (line.equals("PASS")) {
 				queue.add(line);
 			} else if (line.startsWith("MOVE")) {
 				String[] input = line.split("\\,");
@@ -285,9 +292,14 @@ public class Client extends Thread {
 	
 	
 	public void serverEventLoop() {
-		while (!isFinished && in.hasNextLine()) {
-			String inputLine = in.nextLine();
-			dispatchServerLine(inputLine);
+		while (!isFinished) {
+			try {
+				String inputLine = in.readLine();
+				dispatchServerLine(inputLine);
+			} catch (IOException e) {
+				System.out.println("Sorry, cannot reach server");
+				this.shutdown();
+			}
 		}
 	}
 	
@@ -356,8 +368,7 @@ public class Client extends Thread {
 				
 				this.makePlayer(colour);
 				this.startQueue();
-				gui = new GoGuiIntegrator(true, true, size);
-				gui.startGUI();
+				gui.setBoardSize(size);
 				gui.clearBoard();
 				this.doMove(gameState);
 
@@ -449,6 +460,12 @@ public class Client extends Thread {
 				System.out.println("Black scored " + scores[0] + " points");
 				System.out.println("White scored " + scores[1] + " points");
 				System.out.println(input[4]);
+				try {
+					queue.put("ENDGAME");
+				} catch (InterruptedException e) {
+					System.out.println("Queue down");
+					e.printStackTrace();
+				}
 			} else {
 				System.out.println(gameIDError);
 				System.out.println(serverError);
@@ -469,9 +486,19 @@ public class Client extends Thread {
 				isGameConfigRequested = false;
 				serverReady = true;
 				hasReadConfiguration = false;
+				isCurrentPlayer = false;
+				isLeader = false;
+				rematchRequested = false;
+				try {
+					
+					startQueue.join();
+				} catch (InterruptedException e) {
+					System.out.println("Cannot join startQueue thread");
+					e.printStackTrace();
+				}
 			} else if (input[1].equals("0")) {
 				System.out.println("There will be no rematch. Thank you for playing! Bye.");
-				isFinished = true;
+				this.shutdown();
 			} else {
 				System.out.println(commandError + line);
 				System.out.println(serverError);
@@ -492,7 +519,7 @@ public class Client extends Thread {
 	}
 	//------------------ queue ----------------------------
 	public void startQueue() {
-		Thread startQueue = new Thread() {
+		startQueue = new Thread() {
 			public void run() {
 				queueEventLoop();
 			}
@@ -509,6 +536,9 @@ public class Client extends Thread {
 				if (nextMove.equals("DOMOVE")) {
 					if (playerType.equals("human")) {
 						nextMove = queue.take();
+						if (nextMove.equals("ENDGAME")) {
+							break;
+						}		
 						String humanMove = player.determineMove(nextMove);
 						if (humanMove != "INVALID") {
 							this.sendMessage(humanMove);
@@ -521,8 +551,9 @@ public class Client extends Thread {
 						String compMove = player.determineMove(board.getCurrentStringBoard());
 						this.sendMessage(compMove);
 					}
-				}  
-				
+				} else if (nextMove.equals("ENDGAME")) {
+					break;
+				}		
 			} catch (InterruptedException e) {
 				System.out.println("Nothing in queue, interrupted");
 				// TODO: log something
@@ -539,17 +570,19 @@ public class Client extends Thread {
 			this.out.newLine();
 			this.out.flush();
 		} catch (IOException e) {
-			e.printStackTrace();
-			shutdown();
+			System.out.println("Sorry, cannot reach server");
+			this.shutdown();
 		}
 	}
 	
-	// TODO: should be used if "quit"
+	
 	/** close the socket connection. */
 	public void shutdown() {
+		System.out.println("Thank you for playing!");
 		System.out.println("Closing socket connection...");
 		try {
 			sock.close();
+			isFinished = true;
 		} catch (IOException e) {
 			System.out.println("Error during closing of socket");
 			e.printStackTrace();

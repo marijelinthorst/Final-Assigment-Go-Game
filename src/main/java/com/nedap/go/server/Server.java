@@ -86,9 +86,13 @@ public class Server {
 				System.out.println("client found");
 				ClientHandler user = new ClientHandler(this, localSocket);
 				user.start();
-				
-				// TODO: nodig?
 				addHandler(user);
+				
+				for (GameHandler game : gameHandlers) {
+					if (game.empty()) {
+						gameHandlers.remove(game);
+					}
+				}
 				
 				boolean foundGame = false;
 				if (gameHandlers.isEmpty()) {
@@ -101,7 +105,7 @@ public class Server {
 					for (int i = 0; i <= gameHandlers.size() && foundGame == false; i++) {
 						if (!gameHandlers.get(i).full()) {
 							gameHandlers.get(i).addClientHandler(user);
-							System.out.println("tweede speler vind game");
+							System.out.println("Second player added to game handler");
 							foundGame = true;
 						} 	
 					}

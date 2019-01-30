@@ -1,6 +1,5 @@
 package com.nedap.go.server;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -26,6 +25,7 @@ public class GameHandler extends Thread {
 	private int prefColour;
 	
 	private int rematchCount;
+	private int setRematch;
 	
 	// States
 	private boolean isFinished;
@@ -57,71 +57,48 @@ public class GameHandler extends Thread {
 		isWaiting = false;
 	}
 	
-	//-------------- Commands ---------------------------------------
+	//-------------- Run ---------------------------------------
 	public void run() {
 		System.out.println("runGame started");
-		while (!isFinished && !isConfigured && handshakesCount <= 2) {
+		while (!isFinished) {
 			for (ClientHandler player : cHandlers) {
 				String input = player.readQueue();
-				
-				if (input.equals("EmptyQueue")) {
-					// TODO: als langer dan ... niet reageert dan eruit
-				} else if (input.startsWith("HANDSHAKE")) {
-					System.out.println("got handshake");
-					this.checkHandshakes(input, player);
-				} else if (input.startsWith("SET_CONFIG") && player.equals(leader)) {
-					System.out.println("got set config ");
-					this.checkSetConfig(input, player);
-				} else {
-					player.sendMessage("UNKNOWN_COMMAND+Handshake or "
-							+ "set_config required");
-				}
+				this.handleInput(input, player);
 			}
-		}
-		System.out.println("hij gaat nu game maken");
-		createGame();
-		sendAckConfig();
-		
-		while (!isFinished && isConfigured) {
-			if (game.currentPlayer() == 1) {
-				String gameInput = black.readQueue();
-				if (gameInput != "EmptyQueue") {
-					this.handle(gameInput, black);
-				}	
-			} else {
-				String gameInput = white.readQueue();
-				if (gameInput != "EmptyQueue") {
-					this.handle(gameInput, white);
-				}
-			}
-			
-			if (game.isFinished()) {
-				int requestRematch = 0;
-				// TODO: requestRematch depends on disconnects
-				while (requestRematch != this.cHandlers.size()) {
-					this.requestRematch();
-					for (ClientHandler player: cHandlers) {
-						String input = player.readQueue();
-						if (!input.equals("EmptyQueue")) { 
-							this.handleSetRematch(input);
-							requestRematch++;
-						}
-					}
-				}
-				if (rematchCount == this.cHandlers.size()){
-					this.resetGame();
-				} else {
-					for (ClientHandler player: cHandlers) {
-						player.sendMessage("ACKNOWLEDGE_REMATCH+0");
-						isFinished = true;
-					}
-				}
-			}			
 		}
 		// TODO: als iemand weg gaat, gameFinished try en verwijder diegene uit lijst
 	}
 	
+	private void handleInput(String line, ClientHandler player) {
+		if (line.startsWith("EXIT") || line.equals("FAIL")) {
+			this.handleExitAndDisconnect(line, player);
+		} else if (!isConfigured && handshakesCount <= 2) {
+			this.configGame(line, player);
+		} else if (isConfigured) {
+			this.playGame(line, player);
+		} else {
+			System.out.println("No input expected, but received: " + line);
+		}
+	}
+	
 	// --------------- Handle user input before game -----------------------------
+	
+	
+	private void configGame(String input, ClientHandler player) {
+		if (input.equals("EmptyQueue")) {
+			// TODO: als langer dan ... niet reageert dan eruit
+		} else if (input.startsWith("HANDSHAKE")) {				
+			System.out.println("Server received handshake");
+			this.checkHandshakes(input, player);
+		} else if (input.startsWith("SET_CONFIG") && player.equals(leader)) {
+			System.out.println("Server received set configuration ");
+			this.checkSetConfig(input, player);
+		} else {
+			player.sendMessage("UNKNOWN_COMMAND+Handshake or "
+					+ "set_config required");
+		}
+	}
+	
 	public void checkHandshakes(String input, ClientHandler player) {
 		String[] handshake = input.split("\\+");
 		if (handshake.length == handshakeL) {
@@ -131,17 +108,19 @@ public class GameHandler extends Thread {
 				player.sendMessage("ACKNOWLEDGE_HANDSHAKE+" + gameID + "+" + 1);
 				player.sendMessage("REQUEST_CONFIG+Please provide a preferred configuration. "
 						+ "(preferred colour and board size");
-				System.out.println("config requested");
+				System.out.println("Config requested");
 				handshakesCount++;
 			} else if (handshakesCount == 1) {
 				player2 = handshake[1];
 				opponant = player;
 				player.sendMessage("ACKNOWLEDGE_HANDSHAKE+" + gameID + "+" + 0);
-				System.out.println("tweede player binnen");
+				System.out.println("Second player found");
 				handshakesCount++;
 				if (isWaiting == true) {
+					createGame();
+					sendAckConfig();
 					isConfigured = true;
-					System.out.println("waiting is klaar, configured is klaar");
+					System.out.println("No longer waiting on second player, configuration is done");
 				} 
 			} 
 		} else {
@@ -156,12 +135,15 @@ public class GameHandler extends Thread {
 				prefColour = Integer.parseInt(setConfig[2]);
 				if (prefColour == 1 || prefColour == 2) {
 					boardsize = Integer.parseInt(setConfig[3]);
-					System.out.println("set config is gedaan");
+					System.out.println("Set config is received");
 					if (handshakesCount == 2) {
+						createGame();
+						sendAckConfig();
 						isConfigured = true;
+						System.out.println("Ack config is send");
 					} else {
 						isWaiting = true;
-						System.out.println("waiting is true");
+						System.out.println("Waiting on second player");
 					}
 				} else {
 					player.sendMessage(unknown + "preffered colour needs to be 1 or 2");
@@ -201,20 +183,38 @@ public class GameHandler extends Thread {
 				+ game.getBoardSizeN() + "+" + gameState + "+" + players[1].getName();
 		String messagewhite = "ACKNOWLEDGE_CONFIG+" + players[1].getName() + "+" + "2+" 
 				+ game.getBoardSizeN() + "+" + gameState + "+" + players[0].getName();
-		
 		black.sendMessage(messageblack);
-		white.sendMessage(messagewhite);
+		white.sendMessage(messagewhite);	
 	}
 	
 	
 	// ---------------- Handle user input when game is started -------------- 
-	public void handle(String input, ClientHandler colour) {
+	
+	private void playGame(String input, ClientHandler player) {
+		if (game.currentPlayer() == 1 && player.equals(black)) {
+			if (input != "EmptyQueue") {
+				this.handleGame(input, player);
+			}
+		} else if (game.currentPlayer() == 2 && player.equals(white)) {
+			if (input != "EmptyQueue") {
+				this.handleGame(input, player);
+			}
+		} else {
+			//TODO: het is niet jouw beurt
+		}
+
+		if (game.isFinished()) {
+			System.out.println("Game is finished");
+			sendGameFinished(game.determineWinner(), "Game ended");
+			handleRequestRematch();
+		}			
+	}
+	
+	public void handleGame(String input, ClientHandler colour) {
 		if (input.startsWith("MOVE")) {
 			this.handleMove(input, colour);
-		} else if (input.startsWith("EXIT")) {
-			this.handleExit(input, colour);
 		} else {
-			System.out.println(unknown + "Please enter MOVE, EXIT command");
+			colour.sendMessage((unknown + "Please enter MOVE or EXIT command"));
 		}
 	}
 	
@@ -274,79 +274,126 @@ public class GameHandler extends Thread {
 		String message = "ACKNOWLEDGE_MOVE+" + gameID + "+" + move + ";" + colour + "+" + gameState;
 		black.sendMessage(message);
 		white.sendMessage(message);
-		if (game.isFinished()) {
-			sendGameFinished(game.determineWinner(), "Game ended");
-		}
 	}
 	
 	public void sendGameFinished(String winner, String reason) {
 		// GAME_FINISHED+$GAME_ID+$WINNER+$SCORE+$MESSAGE
 		String message = "GAME_FINISHED+" + gameID + "+" + winner + "+"
 				+ game.getScore(1) + ";" + game.getScore(2) + "+" + reason;
-		black.sendMessage(message);
-		white.sendMessage(message);
+		for (ClientHandler player: cHandlers) {
+			player.sendMessage(message);
+		}
 		// TODO: dit moet niet hier?
-		this.isFinished = true;
+		// this.isFinished = true;
 	}
 	
-	public void handleExit(String input, ClientHandler colour) {
+	// --------------------- exit -------------------------
+	public void handleExitAndDisconnect(String input, ClientHandler colour) {
 		// EXIT+$GAME_ID+$PLAYER_NAME
-		Player playingPlayer;
+		System.out.println("An exit or disconnect is received");
+		Player exitPlayer;
 		Player winner;
 		if (colour.equals(black)) {
-			playingPlayer = players[0];
+			exitPlayer = players[0];
 			winner = players[1];
 		} else {
-			playingPlayer = players[1];
+			exitPlayer = players[1];
 			winner = players[0];
 		}
 		
-		String[] exit = input.split("\\+");
-		if (exit.length == exitL) {
-			if (exit[1].equals(Integer.toString(gameID)) && 
-					exit[2].equals(playingPlayer.getName())) {
-				// TODO: sluit af
-				sendGameFinished(winner.getName(), playingPlayer.getName() + "left the game");
+		System.out.println("Determined winner");
+		
+		if (input.startsWith("EXIT")) {
+			String[] exit = input.split("\\+");
+			if (exit.length == exitL && exit[1].equals(Integer.toString(gameID)) && 
+					exit[2].equals(exitPlayer.getName())) {
+				System.out.println("EXIT correct");
+				colour.shutdown();
+				System.out.println("Shutdown clienthandler");
+				this.removeClientHandler(colour);
+				System.out.println("Removed clienthandler");
+				sendGameFinished(winner.getName(), (exitPlayer.getName() + "left the game"));
+				System.out.println("Send game finished");
+				this.handleRequestRematch();
 			} else {
-				System.out.println(unknown + "GameID and/or player name is not correct");
+				System.out.println(unknown + "Exit command length, GameID and/or player "
+						+ "name is not correct");
 			}
-		} else {
-			System.out.println(unknown + "Exit command length is not 3");
-		}
+		} else if (input.equals("FAIL")) {
+			colour.shutdown();
+			this.removeClientHandler(colour);
+			sendGameFinished(winner.getName(), exitPlayer.getName() + " left the game");
+			this.handleRequestRematch();
+		}	
 	}
 	
 	// -------------------- Handle rematch -------------------------
 	
-	// TODO: send rematch request
+	public void handleRequestRematch() {
+		this.sendRequestRematch();
+		System.out.println("Request for rematch send");
+		
+		setRematch = 0;
+		while (setRematch != this.cHandlers.size()) {	
+			this.readSetRematch();	
+			
+		}
+		
+		if (rematchCount == this.cHandlers.size()) {
+			this.resetGame();
+		} else {
+			for (ClientHandler player: cHandlers) {
+				player.sendMessage("ACKNOWLEDGE_REMATCH+0");
+				System.out.println("No rematch");
+				System.out.println("Acknowledge rematch send to player");
+				player.shutdown();
+				this.removeClientHandler(player);
+			}
+			isFinished = true;
+		}
+	}
 	
-	public void requestRematch() {
+	public void sendRequestRematch() {
 		for (ClientHandler player: cHandlers) {
 			player.sendMessage("REQUEST_REMATCH");
 		}
 	}
 	
-	public void resetGame() {
+	public void readSetRematch() {
 		for (ClientHandler player: cHandlers) {
-			player.sendMessage("ACKNOWLEDGE_REMATCH+0");
+			String input = player.readQueue();
+			if (!input.equals("EmptyQueue")) { 
+				this.handleSetRematch(input);
+				setRematch++;
+				System.out.println("A set rematch received");
+			}
 		}
+	}
+	
+	public void resetGame() {
+		System.out.println("Game will now be reset");
+		for (ClientHandler player: cHandlers) {
+			player.sendMessage("ACKNOWLEDGE_REMATCH+1");
+		}
+		System.out.println("Acknowledge rematch sent to players");
+		
 		isFinished = false;
 		isConfigured = false;
 		handshakesCount = 0;
 		rematchCount = 0;
 		player1 = "";
 		player2 = "";
-		cHandlers.clear();
 		isWaiting = false;
 	}
 	
 	public void handleSetRematch(String input) {
-		String[] setRematch = input.split("\\+");
-		if (setRematch.length == rematchL) {
-			if (setRematch[1].equals("1")) {
+		String[] setRematchInput = input.split("\\+");
+		if (setRematchInput.length == rematchL) {
+			if (setRematchInput[1].equals("1")) {
 				rematchCount++;
 			}
 		} else {
-			System.out.println(unknown + "Set rematch command length is not 3");
+			System.out.println(unknown + "Set rematch command length is not 2");
 		}
 	}
 	
@@ -359,13 +406,15 @@ public class GameHandler extends Thread {
 		return cHandlers.size() == 2;
 	}
 	
+	public boolean empty() {
+		return cHandlers.size() == 0;
+	}
+	
 	public void addClientHandler(ClientHandler player) {
 		cHandlers.add(player);
 	}
 	
 	public void removeClientHandler(ClientHandler player) {
 		cHandlers.remove(player);
-		handshakesCount--;
-		// TODO: zorg ervoor opnieuw run, gameconfig enzo;
 	}
 }

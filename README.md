@@ -9,7 +9,7 @@ mvn clean install
 java -cp target/gogame-1.0-SNAPSHOT.jar com.nedap.go.server.Server
 
 * Start the client:
-java -cp targetgogame-1.0-SNAPSHOT.jar com.nedap.go.client.Client
+java -cp target/gogame-1.0-SNAPSHOT.jar com.nedap.go.client.Client
 
 * Use the client:
 follow instructions from TUI

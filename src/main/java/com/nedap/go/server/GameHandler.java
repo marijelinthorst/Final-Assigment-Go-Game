@@ -246,6 +246,7 @@ public class GameHandler extends Thread {
 						// need to check both ways since you can suicide a group and don't recreate
 						// a previous board state (since the other player did moves)
 						game.removeCaptured(playingPlayer.getColour(), capturedColour, game.getBoard());
+						game.addCurrentBoardToHistory();
 						sendAckMove(moveInt, playingPlayer.getColour());
 					} else {
 						colour.sendMessage(invalidM + 

@@ -124,9 +124,12 @@ public class Game {
 		}
 		this.removeCaptured(capturedColour, colour, copy);
 		this.removeCaptured(colour, capturedColour, copy);
-		
-		if (history.contains(copy.getCurrentStringBoard())) {
-			return "Move invalid: creates a previous board state";
+		System.out.println("copy.currentstring: " + copy.getCurrentStringBoard());
+		for (String state: history) {
+			
+			if (state.equals(copy.getCurrentStringBoard())) {
+				return "Move invalid: creates a previous board state";
+			}
 		}
 		return "Move valid";
 	}
@@ -153,15 +156,20 @@ public class Game {
 
 	// -- Commands ---------------------------------------------------
 
+	public void addCurrentBoardToHistory() {
+		Board copy = board.deepCopy(); 
+		// TODO: is copy nodig?
+		history.add(copy.getCurrentStringBoard());
+		System.out.println(history);
+	}
+	
+	
 	/**
 	 * Places stone on point, resets passes and changes current player to the next
 	 * player. Adds board, after move, to the history
 	 */
 	public void doMove(int index, int colour) {
 		board.setPoint(index, colour);
-		Board copy = board.deepCopy(); 
-		// TODO: is copy nodig?
-		history.add(copy.getCurrentStringBoard());
 		countPasses = 0;
 		current++;
 		if (current == players.length) {
@@ -190,7 +198,7 @@ public class Game {
 		board.setPoint(index, 0);
 	}
 	
-	public void removeGroup(List<Integer> group) {
+	public void removeGroup(List<Integer> group, Board board) {
 		for (int i: group) {
 			board.setPoint(i, 0);
 		}
@@ -208,7 +216,7 @@ public class Game {
 				}
 			}
 			if (count == 0) {
-				this.removeGroup(group);
+				this.removeGroup(group, board);
 			}
 		}
 	}
